@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
+import { useSearchParams } from 'next/navigation';
 
 // Dynamic import to avoid SSR issues with Leaflet
 const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
@@ -21,6 +22,7 @@ export function DonationMap() {
   const [userLocation, setUserLocation] = useState<[number, number]>([40.7128, -74.0060]); // Default to NYC
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     // Dynamically import Leaflet on the client to avoid SSR "window is not defined" issues
@@ -57,12 +59,16 @@ export function DonationMap() {
 
     // Load donations
     loadDonations();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams?.toString()]);
 
   const loadDonations = async () => {
     setLoading(true);
     
-    const { data, error } = await supabase
+    // Read category filter from URL; 'all' means no filter
+    const category = searchParams.get('category') ?? 'all';
+
+    let query = supabase
       .from('donations')
       .select(`
         *,
@@ -80,6 +86,12 @@ export function DonationMap() {
       .eq('is_hidden', false)
       .gte('expiry_date', new Date().toISOString().split('T')[0])
       .order('created_at', { ascending: false });
+
+    if (category && category !== 'all') {
+      query = query.eq('category_id', category);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error loading donations:', error);

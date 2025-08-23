@@ -6,6 +6,7 @@ import { Database } from '@/lib/supabase/database.types';
 import { DonationCard } from './donation-card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 type Donation = Database['public']['Tables']['donations']['Row'] & {
   profiles: Database['public']['Tables']['profiles']['Row'];
@@ -16,15 +17,21 @@ export function DonationList() {
   const [donations, setDonations] = useState<Donation[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
+    // When URL filters change, reload list
     loadDonations();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams?.toString()]);
 
   const loadDonations = async () => {
     setLoading(true);
     
-    const { data, error } = await supabase
+    // Read category filter from URL; 'all' means no filter
+    const category = searchParams.get('category') ?? 'all';
+
+    let query = supabase
       .from('donations')
       .select(`
         *,
@@ -43,6 +50,11 @@ export function DonationList() {
       .eq('is_hidden', false)
       .gte('expiry_date', new Date().toISOString().split('T')[0])
       .order('created_at', { ascending: false });
+
+    if (category && category !== 'all') {
+      query = query.eq('category_id', category);
+    }
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error loading donations:', error);

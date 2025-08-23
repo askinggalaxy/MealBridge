@@ -1,17 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
+import { Database } from '@/lib/supabase/database.types';
 
 export function DonationFilters() {
-  const [distance, setDistance] = useState([5]);
-  const [category, setCategory] = useState('all');
-  const [sealedOnly, setSealedOnly] = useState(false);
-  const [sortBy, setSortBy] = useState('newest');
+  // Read current URL params so filters stay in sync across components and reloads
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const supabase = createClient();
+
+  type Category = Database['public']['Tables']['categories']['Row'];
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  // Initialize UI state from URL to keep a single source of truth for filters
+  const [distance, setDistance] = useState([Number(searchParams.get('distance') ?? 5)]);
+  const [category, setCategory] = useState(searchParams.get('category') ?? 'all');
+  const [sealedOnly, setSealedOnly] = useState((searchParams.get('sealed') ?? 'false') === 'true');
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') ?? 'newest');
+
+  // Load categories to populate the dropdown and ensure we use IDs
+  useEffect(() => {
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+      if (!error && data) setCategories(data);
+    };
+    load();
+  }, [supabase]);
+
+  // Helper to write current local state to the URL
+  const applyToUrl = (next: Partial<{ distance: number; category: string; sealed: boolean; sort: string }>) => {
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    if (next.distance !== undefined) params.set('distance', String(next.distance));
+    if (next.category !== undefined) params.set('category', next.category);
+    if (next.sealed !== undefined) params.set('sealed', String(next.sealed));
+    if (next.sort !== undefined) params.set('sort', String(next.sort));
+    router.replace(`/?${params.toString()}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -33,21 +67,25 @@ export function DonationFilters() {
       {/* Category Filter */}
       <div>
         <Label className="text-sm font-medium mb-3 block">Category</Label>
-        <Select value={category} onValueChange={setCategory}>
+        <Select
+          value={category}
+          onValueChange={(val) => {
+            // Update local state
+            setCategory(val);
+            // Immediately sync to URL so list/map refresh without clicking Apply
+            applyToUrl({ category: val });
+          }}
+        >
           <SelectTrigger>
             <SelectValue placeholder="All categories" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="bread">🍞 Bread</SelectItem>
-            <SelectItem value="dairy">🥛 Dairy</SelectItem>
-            <SelectItem value="produce">🥬 Produce</SelectItem>
-            <SelectItem value="canned">🥫 Canned</SelectItem>
-            <SelectItem value="cooked">🍽️ Cooked</SelectItem>
-            <SelectItem value="baby_food">🍼 Baby Food</SelectItem>
-            <SelectItem value="beverages">🥤 Beverages</SelectItem>
-            <SelectItem value="desserts">🍰 Desserts</SelectItem>
-            <SelectItem value="other">🍱 Other</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.icon} {c.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -80,8 +118,8 @@ export function DonationFilters() {
       </div>
 
       <Button className="w-full" onClick={() => {
-        // Apply filters - this would trigger a re-fetch with filters
-        console.log('Applying filters:', { distance: distance[0], category, sealedOnly, sortBy });
+        // Apply all filters manually (useful for distance/other controls)
+        applyToUrl({ distance: distance[0], category, sealed: sealedOnly, sort: sortBy });
       }}>
         Apply Filters
       </Button>

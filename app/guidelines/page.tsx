@@ -1,10 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Header } from '@/components/layout/header';
 
 export default function GuidelinesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Top navigation menu/header */}
+      <Header />
+
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-8">

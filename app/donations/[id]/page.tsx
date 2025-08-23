@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { notFound } from 'next/navigation';
 import { DonationDetails } from '@/components/donations/donation-details';
+import { Header } from '@/components/layout/header';
 
 export default async function DonationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,6 +34,7 @@ export default async function DonationPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Header />
       <div className="container mx-auto px-4 py-8">
         <DonationDetails donation={donation} />
       </div>
