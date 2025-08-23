@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, Clock, MapPin, Star, User, Phone, MessageCircle } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { toast } from 'sonner';
 import { ReservationDialog } from './reservation-dialog';

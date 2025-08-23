@@ -1,15 +1,10 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/utils/supabase/server';
 import { notFound } from 'next/navigation';
 import { DonationDetails } from '@/components/donations/donation-details';
 
-interface DonationPageProps {
-  params: {
-    id: string;
-  };
-}
-
-export default async function DonationPage({ params }: DonationPageProps) {
-  const supabase = createServerClient();
+export default async function DonationPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await createClient();
 
   const { data: donation, error } = await supabase
     .from('donations')
@@ -28,7 +23,7 @@ export default async function DonationPage({ params }: DonationPageProps) {
         icon
       )
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('is_hidden', false)
     .single();
 

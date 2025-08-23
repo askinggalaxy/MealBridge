@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
+import L from 'leaflet';
 
 // Dynamic import to avoid SSR issues with Leaflet
 const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
@@ -23,6 +24,21 @@ export function DonationMap() {
   const supabase = createClient();
 
   useEffect(() => {
+    // Configure Leaflet default marker icons on the client to avoid missing marker images in Next.js
+    // We use require() so Webpack bundles these image assets correctly.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const iconRetina = require('leaflet/dist/images/marker-icon-2x.png');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const icon = require('leaflet/dist/images/marker-icon.png');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const shadow = require('leaflet/dist/images/marker-shadow.png');
+
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: iconRetina,
+      iconUrl: icon,
+      shadowUrl: shadow,
+    });
+
     // Get user's location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(

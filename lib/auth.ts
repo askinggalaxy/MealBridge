@@ -1,8 +1,8 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 
 export async function getUser() {
-  const supabase = createServerClient();
+  const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   
   if (error || !user) {
@@ -13,7 +13,7 @@ export async function getUser() {
 }
 
 export async function getProfile() {
-  const supabase = createServerClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) return null;

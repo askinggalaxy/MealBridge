@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/utils/supabase/server';
 
 interface NotificationData {
   user_id: string;
@@ -9,7 +9,7 @@ interface NotificationData {
 }
 
 export async function createNotification(notificationData: NotificationData) {
-  const supabase = createServerClient();
+  const supabase = await createClient();
   
   const { error } = await supabase
     .from('notifications')
@@ -24,7 +24,7 @@ export async function createNotification(notificationData: NotificationData) {
 }
 
 export async function sendReservationNotification(donationId: string, recipientId: string) {
-  const supabase = createServerClient();
+  const supabase = await createClient();
   
   // Get donation and donor info
   const { data: donation } = await supabase
@@ -54,7 +54,7 @@ export async function sendReservationDecisionNotification(
   reservationId: string, 
   status: 'accepted' | 'declined'
 ) {
-  const supabase = createServerClient();
+  const supabase = await createClient();
   
   // Get reservation info
   const { data: reservation } = await supabase

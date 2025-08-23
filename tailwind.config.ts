@@ -1,12 +1,7 @@
-import type { Config } from 'tailwindcss';
-
-const config: Config = {
-  darkMode: ['class'],
-  content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
+export default {
+  // Tailwind v4: prefer string strategy for class-based dark mode
+  darkMode: 'class',
+  // content and plugins are handled via CSS (@import/@plugin) in v4
   theme: {
     extend: {
       backgroundImage: {
@@ -85,6 +80,4 @@ const config: Config = {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
 };
-export default config;
