@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { DonationCard } from './donation-card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
 
 type Donation = Database['public']['Tables']['donations']['Row'] & {
   profiles: Database['public']['Tables']['profiles']['Row'];
@@ -38,7 +40,6 @@ export function DonationList() {
           icon
         )
       `)
-      .eq('status', 'available')
       .eq('is_hidden', false)
       .gte('expiry_date', new Date().toISOString().split('T')[0])
       .order('created_at', { ascending: false });
@@ -66,7 +67,7 @@ export function DonationList() {
     );
   }
 
-  if (donations.length === 0) {
+  if (!donations.length) {
     return (
       <div className="bg-white p-8 rounded-lg shadow-sm text-center">
         <p className="text-gray-500">No food donations available nearby.</p>
@@ -77,9 +78,26 @@ export function DonationList() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold mb-4">Available Food ({donations.length})</h2>
+      <h2 className="text-xl font-semibold mb-4">Nearby Food ({donations.length})</h2>
+      {donations.some((d) => d.status !== 'available') && (
+        <Alert className="bg-blue-50 border-blue-200 text-blue-900">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Some items are already reserved (Delivery) or donated. They are shown grayed out and cannot be reserved.
+          </AlertDescription>
+        </Alert>
+      )}
       {donations.map((donation) => (
-        <DonationCard key={donation.id} donation={donation} />
+        <div
+          key={donation.id}
+          className={
+            donation.status === 'available'
+              ? ''
+              : 'opacity-70'
+          }
+        >
+          <DonationCard donation={donation} />
+        </div>
       ))}
     </div>
   );

@@ -49,6 +49,22 @@ export function DonationCard({ donation }: DonationCardProps) {
               <Badge className={`text-xs ${getExpiryColor(donation.expiry_date)}`}>
                 Expires {formatDistanceToNow(new Date(donation.expiry_date), { addSuffix: true })}
               </Badge>
+              {/* Status badge for list cards: Reserved/Donated */}
+              {donation.status !== 'available' && (
+                <Badge
+                  className={`text-xs ${
+                    donation.status === 'reserved'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : donation.status === 'picked_up'
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {donation.status === 'reserved' && 'Delivery'}
+                  {donation.status === 'picked_up' && 'Donated'}
+                  {donation.status !== 'reserved' && donation.status !== 'picked_up' && donation.status}
+                </Badge>
+              )}
             </div>
             <h3 className="text-lg font-semibold mb-1">{donation.title}</h3>
             <p className="text-gray-600 text-sm line-clamp-2">{donation.description}</p>
@@ -108,11 +124,17 @@ export function DonationCard({ donation }: DonationCardProps) {
       </CardContent>
 
       <CardFooter className="pt-3">
-        <Link href={`/donations/${donation.id}`} className="w-full">
-          <Button className="w-full bg-green-600 hover:bg-green-700">
-            View Details & Reserve
+        {donation.status === 'available' ? (
+          <Link href={`/donations/${donation.id}`} className="w-full">
+            <Button className="w-full bg-green-600 hover:bg-green-700">
+              View Details & Reserve
+            </Button>
+          </Link>
+        ) : (
+          <Button className="w-full" variant="outline" disabled>
+            {donation.status === 'reserved' ? 'Reserved - Delivery in progress' : 'Donated'}
           </Button>
-        </Link>
+        )}
       </CardFooter>
     </Card>
   );

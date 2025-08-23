@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Database } from '@/lib/supabase/database.types';
+import ReservationActions from '@/components/reservations/reservation-actions';
 
 // Types from generated Database
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -120,6 +121,17 @@ export default async function ReservationsPage() {
                 </p>
               )}
             </div>
+
+            {/* Donor-side actions: approve/decline + send message */}
+            {donor?.id === user.id && (
+              <ReservationActions
+                reservationId={r.id}
+                donationId={d.id}
+                donorId={donor.id}
+                recipientId={recip?.id ?? ''}
+                currentStatus={r.status as any}
+              />)
+            }
           </div>
           <div className="ml-4 flex-shrink-0">
             <Link href={`/donations/${d?.id}`}>

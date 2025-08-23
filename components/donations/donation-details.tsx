@@ -94,11 +94,24 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
                   <CardTitle className="text-2xl mb-2">{donation.title}</CardTitle>
                 </div>
                 
-                <Badge 
-                  variant={donation.status === 'available' ? 'default' : 'secondary'}
-                  className={donation.status === 'available' ? 'bg-green-100 text-green-800' : ''}
+                <Badge
+                  variant="secondary"
+                  className={
+                    donation.status === 'available'
+                      ? 'bg-green-100 text-green-800'
+                      : donation.status === 'reserved'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : donation.status === 'picked_up'
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-gray-100 text-gray-800'
+                  }
                 >
-                  {donation.status.charAt(0).toUpperCase() + donation.status.slice(1)}
+                  {donation.status === 'available' && 'Available'}
+                  {donation.status === 'reserved' && 'Delivery'}
+                  {donation.status === 'picked_up' && 'Donated'}
+                  {donation.status !== 'available' && donation.status !== 'reserved' && donation.status !== 'picked_up' && (
+                    donation.status.charAt(0).toUpperCase() + donation.status.slice(1)
+                  )}
                 </Badge>
               </div>
             </CardHeader>
