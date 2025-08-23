@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, Clock, MapPin, Star, User, Phone, MessageCircle } from 'lucide-react';
+import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { toast } from 'sonner';
@@ -193,7 +194,7 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
               <CardTitle className="text-lg">Shared by</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-3 mb-4">
+              <Link href={`/users/${donation.profiles.id}`} className="flex items-center gap-3 mb-4 hover:underline">
                 <Avatar>
                   <AvatarFallback>
                     {donation.profiles.display_name.charAt(0).toUpperCase()}
@@ -210,7 +211,7 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
                     </div>
                   )}
                 </div>
-              </div>
+              </Link>
               
               {donation.profiles.neighborhood && (
                 <p className="text-sm text-gray-600 mb-4">

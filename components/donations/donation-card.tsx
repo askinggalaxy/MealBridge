@@ -87,7 +87,9 @@ export function DonationCard({ donation }: DonationCardProps) {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="flex items-center gap-2 text-gray-600">
             <User className="w-4 h-4" />
-            <span>{donation.profiles.display_name}</span>
+            <Link href={`/users/${donation.profiles.id}`} className="hover:underline">
+              {donation.profiles.display_name}
+            </Link>
             {donation.profiles.reputation_count > 0 && (
               <div className="flex items-center">
                 <Star className="w-3 h-3 text-yellow-500 fill-current" />
