@@ -62,6 +62,8 @@ export function AuthForm({ type }: AuthFormProps) {
         email: data.email,
         password: data.password!,
         options: {
+          // Ensure redirect URL is explicitly provided to satisfy Supabase Auth requirements
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             display_name: data.displayName,
           },
@@ -138,8 +140,10 @@ export function AuthForm({ type }: AuthFormProps) {
           {type === 'signup' && (
             <div>
               <Label htmlFor="displayName">Full Name</Label>
+              {/* Use a semantic autocomplete token so browsers can assist users reliably */}
               <Input
                 id="displayName"
+                autoComplete="name"
                 {...form.register('displayName')}
                 placeholder="Enter your full name"
               />
@@ -153,9 +157,11 @@ export function AuthForm({ type }: AuthFormProps) {
 
           <div>
             <Label htmlFor="email">Email</Label>
+            {/* Provide stable autocomplete hints to prevent hydration inconsistencies */}
             <Input
               id="email"
               type="email"
+              autoComplete="email"
               {...form.register('email')}
               placeholder="Enter your email"
             />
@@ -168,9 +174,11 @@ export function AuthForm({ type }: AuthFormProps) {
 
           <div>
             <Label htmlFor="password">Password (optional)</Label>
+            {/* Use context-appropriate autocomplete for login vs signup */}
             <Input
               id="password"
               type="password"
+              autoComplete={type === 'login' ? 'current-password' : 'new-password'}
               {...form.register('password')}
               placeholder="Leave blank for magic link"
             />
