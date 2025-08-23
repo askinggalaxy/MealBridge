@@ -11,6 +11,7 @@ export function Header() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const supabase = createClient();
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
   useEffect(() => {
     const getUser = async () => {
@@ -26,6 +27,37 @@ export function Header() {
 
     return () => subscription.unsubscribe();
   }, [supabase.auth]);
+
+  // Keep the bell badge in sync with user's unread notifications
+  useEffect(() => {
+    if (!user?.id) return;
+    let isMounted = true;
+
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      if (isMounted) setUnreadCount(count ?? 0);
+    };
+
+    fetchUnread();
+
+    const channel = supabase
+      .channel('notifications-bell')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => fetchUnread()
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, user?.id]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -67,8 +99,13 @@ export function Header() {
             {user ? (
               <>
                 <Link href="/notifications">
-                  <Button variant="ghost" size="icon">
+                  <Button variant="ghost" size="icon" className="relative">
                     <Bell className="w-5 h-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
                   </Button>
                 </Link>
                 <Link href="/profile">
