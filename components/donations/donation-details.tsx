@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, Clock, MapPin, Star, User, Phone, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -196,6 +196,9 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
             <CardContent>
               <Link href={`/users/${donation.profiles.id}`} className="flex items-center gap-3 mb-4 hover:underline">
                 <Avatar>
+                  {donation.profiles.avatar_url && (
+                    <AvatarImage src={donation.profiles.avatar_url} alt={donation.profiles.display_name} />
+                  )}
                   <AvatarFallback>
                     {donation.profiles.display_name.charAt(0).toUpperCase()}
                   </AvatarFallback>

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 // Strongly typed profile row based on generated Supabase types
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -21,6 +22,7 @@ export default function ProfileForm({ profile, email }: ProfileFormProps) {
   const [displayName, setDisplayName] = useState(profile.display_name ?? '');
   const [neighborhood, setNeighborhood] = useState(profile.neighborhood ?? '');
   const [phone, setPhone] = useState(profile.phone ?? '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url ?? null);
   const [saving, setSaving] = useState(false);
 
   const supabase = createClient();
@@ -37,6 +39,8 @@ export default function ProfileForm({ profile, email }: ProfileFormProps) {
           display_name: displayName,
           neighborhood,
           phone,
+          // Persist avatar_url if it changed
+          avatar_url: avatarUrl ?? null,
           // updated_at is managed by DB default/trigger in schema; no need to send here
         })
         .eq('id', profile.id);
@@ -54,8 +58,82 @@ export default function ProfileForm({ profile, email }: ProfileFormProps) {
     }
   };
 
+  // Handle avatar file selection and upload to Supabase Storage "user-avatars" bucket
+  const onAvatarSelected = async (file: File | null) => {
+    if (!file) return;
+    try {
+      setSaving(true);
+      // Generate a deterministic path under the user's folder; including timestamp avoids name collisions.
+      const path = `${profile.id}/${Date.now()}_${file.name}`;
+
+      // Upload the raw file to storage; RLS on storage should allow the authenticated user to upload.
+      const { error: uploadError } = await supabase.storage
+        .from('user-avatars')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+      if (uploadError) {
+        toast.error(uploadError.message);
+        return;
+      }
+
+      // Get a public URL for the uploaded file. The bucket should be public as per your note.
+      const { data: publicData } = supabase.storage
+        .from('user-avatars')
+        .getPublicUrl(path);
+
+      const publicUrl = publicData.publicUrl;
+
+      // Save URL into profile immediately for better UX
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', profile.id);
+      if (updateError) {
+        toast.error(updateError.message);
+        return;
+      }
+
+      setAvatarUrl(publicUrl);
+      toast.success('Avatar updated');
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to upload avatar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Avatar section: displays current avatar (if any) and allows uploading a new one */}
+      <div>
+        <Label className="text-sm">Avatar</Label>
+        <div className="mt-2 flex items-center gap-4">
+          <Avatar className="h-16 w-16">
+            {/* If avatar_url exists, render it; otherwise fallback to initials */}
+            {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
+            <AvatarFallback>
+              {(displayName || 'U')
+                .split(' ')
+                .map((p) => p[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e) => onAvatarSelected(e.target.files?.[0] ?? null)}
+              disabled={saving}
+            />
+            <p className="text-xs text-gray-500 mt-1">JPG/PNG, recommended square image. Uploading replaces the current avatar.</p>
+          </div>
+        </div>
+      </div>
+
       {/* Read-only section for auth email so the user understands which account is active */}
       <div>
         <Label className="text-sm">Email</Label>

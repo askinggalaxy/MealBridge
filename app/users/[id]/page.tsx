@@ -105,10 +105,11 @@ export default async function PublicProfilePage({
         <Card className="overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              {/* NOTE: profiles table doesn't include an avatar URL field in types; show fallback initials. */}
+              {/* Avatar: show image if available, else initials */}
               <Avatar className="h-16 w-16">
-                {/* If you later add avatar_url to profiles, render as AvatarImage src */}
-                <AvatarImage src={''} alt={profile.display_name} />
+                {profile.avatar_url && (
+                  <AvatarImage src={profile.avatar_url} alt={profile.display_name} />
+                )}
                 <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
 

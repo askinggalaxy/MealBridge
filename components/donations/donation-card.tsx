@@ -8,6 +8,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Calendar, Clock, MapPin, Star, User } from 'lucide-react';
 import { Database } from '@/lib/supabase/database.types';
 import { formatDistanceToNow } from 'date-fns';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type Donation = Database['public']['Tables']['donations']['Row'] & {
   profiles: Database['public']['Tables']['profiles']['Row'];
@@ -86,7 +87,14 @@ export function DonationCard({ donation }: DonationCardProps) {
       <CardContent className="py-3">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="flex items-center gap-2 text-gray-600">
-            <User className="w-4 h-4" />
+            <Avatar className="h-6 w-6">
+              {donation.profiles.avatar_url && (
+                <AvatarImage src={donation.profiles.avatar_url} alt={donation.profiles.display_name} />
+              )}
+              <AvatarFallback className="text-xs">
+                {donation.profiles.display_name.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
             <Link href={`/users/${donation.profiles.id}`} className="hover:underline">
               {donation.profiles.display_name}
             </Link>

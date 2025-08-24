@@ -38,6 +38,7 @@ export function DonationList() {
         profiles!donations_donor_id_fkey (
           id,
           display_name,
+          avatar_url,
           reputation_score,
           reputation_count,
           neighborhood

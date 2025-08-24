@@ -14,6 +14,7 @@ export default async function DonationPage({ params }: { params: Promise<{ id: s
       profiles!donations_donor_id_fkey (
         id,
         display_name,
+        avatar_url,
         reputation_score,
         reputation_count,
         neighborhood,

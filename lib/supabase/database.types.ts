@@ -19,6 +19,7 @@ export interface Database {
           location_lng: number | null
           neighborhood: string | null
           phone: string | null
+          avatar_url: string | null
           reputation_score: number
           reputation_count: number
           is_verified: boolean
@@ -35,6 +36,7 @@ export interface Database {
           location_lng?: number | null
           neighborhood?: string | null
           phone?: string | null
+          avatar_url?: string | null
           reputation_score?: number
           reputation_count?: number
           is_verified?: boolean
@@ -51,6 +53,7 @@ export interface Database {
           location_lng?: number | null
           neighborhood?: string | null
           phone?: string | null
+          avatar_url?: string | null
           reputation_score?: number
           reputation_count?: number
           is_verified?: boolean
