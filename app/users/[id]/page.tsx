@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Star } from 'lucide-react';
+import Link from 'next/link';
 
 // Explicit types for clarity and safety (per user rules)
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -95,6 +96,42 @@ export default async function PublicProfilePage({
     .join('')
     .toUpperCase();
 
+  // Helper: map donation status to colored badge classes
+  const donationStatusClass = (status: Database['public']['Tables']['donations']['Row']['status']) => {
+    switch (status) {
+      case 'available':
+        return 'bg-green-100 text-green-800';
+      case 'reserved':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'picked_up':
+        return 'bg-gray-800 text-white';
+      case 'canceled':
+        return 'bg-red-100 text-red-800';
+      case 'expired':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return '';
+    }
+  };
+
+  // Helper: map reservation status to colored badge classes
+  const reservationStatusClass = (status: Database['public']['Tables']['reservations']['Row']['status']) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-blue-100 text-blue-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'accepted':
+        return 'bg-green-100 text-green-800';
+      case 'declined':
+        return 'bg-red-100 text-red-800';
+      case 'canceled':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return '';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top navigation menu/header */}
@@ -158,16 +195,18 @@ export default async function PublicProfilePage({
                 <p className="text-sm text-gray-500">No donations yet.</p>
               )}
               {donatedItems?.map((d) => (
-                <div key={d.id} className="flex items-center justify-between border rounded-md p-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg">{d.categories?.icon}</span>
-                    <div>
-                      <p className="font-medium">{d.title}</p>
-                      <p className="text-xs text-gray-500">{d.categories?.name}</p>
+                <div key={d.id} className="border rounded-md p-0 overflow-hidden">
+                  <div className="flex items-center justify-between p-3">
+                    <Link href={`/donations/${d.id}`} className="flex items-center gap-3 flex-1 hover:underline">
+                      <span className="text-lg">{d.categories?.icon}</span>
+                      <div>
+                        <p className="font-medium">{d.title}</p>
+                        <p className="text-xs text-gray-500">{d.categories?.name}</p>
+                      </div>
+                    </Link>
+                    <div className="text-xs">
+                      <Badge className={donationStatusClass(d.status)}>{d.status}</Badge>
                     </div>
-                  </div>
-                  <div className="text-xs">
-                    <Badge variant="outline">{d.status}</Badge>
                   </div>
                 </div>
               ))}
@@ -186,16 +225,18 @@ export default async function PublicProfilePage({
                 <p className="text-sm text-gray-500">No received items yet.</p>
               )}
               {receivedItems?.map((r) => (
-                <div key={r.id} className="flex items-center justify-between border rounded-md p-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg">{r.donations.categories?.icon}</span>
-                    <div>
-                      <p className="font-medium">{r.donations.title}</p>
-                      <p className="text-xs text-gray-500">{r.donations.categories?.name}</p>
+                <div key={r.id} className="border rounded-md p-0 overflow-hidden">
+                  <div className="flex items-center justify-between p-3">
+                    <Link href={`/donations/${r.donations.id}`} className="flex items-center gap-3 flex-1 hover:underline">
+                      <span className="text-lg">{r.donations.categories?.icon}</span>
+                      <div>
+                        <p className="font-medium">{r.donations.title}</p>
+                        <p className="text-xs text-gray-500">{r.donations.categories?.name}</p>
+                      </div>
+                    </Link>
+                    <div className="text-xs">
+                      <Badge className={reservationStatusClass(r.status)}>{r.status}</Badge>
                     </div>
-                  </div>
-                  <div className="text-xs">
-                    <Badge variant="outline">completed</Badge>
                   </div>
                 </div>
               ))}

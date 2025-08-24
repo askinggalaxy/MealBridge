@@ -3,6 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
+import { Footer } from '@/components/layout/footer';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -20,6 +21,8 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         {children}
+        {/* Global site footer with important links */}
+        <Footer />
         <Toaster />
       </body>
     </html>
