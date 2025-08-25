@@ -37,22 +37,15 @@ export function DonationMap() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // 1) Dynamically import Leaflet on the client to avoid SSR issues and configure default marker icons
+    // 1) Dynamically import Leaflet on the client to avoid SSR issues with Leaflet
     const setupLeaflet = async () => {
       const L = (await import('leaflet')).default;
-      // NOTE: We configure the default marker icons so Leaflet markers render correctly when bundled.
-      // We keep this strictly client-side to avoid any SSR pitfalls.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const iconRetina = require('leaflet/dist/images/marker-icon-2x.png');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const icon = require('leaflet/dist/images/marker-icon.png');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const shadow = require('leaflet/dist/images/marker-shadow.png');
-
+      // Configure default icons using absolute CDN URLs to be robust across Webpack/Turbopack builds
+      const base = 'https://unpkg.com/leaflet@1.9.4/dist/images/';
       L.Icon.Default.mergeOptions({
-        iconRetinaUrl: iconRetina,
-        iconUrl: icon,
-        shadowUrl: shadow,
+        iconRetinaUrl: `${base}marker-icon-2x.png`,
+        iconUrl: `${base}marker-icon.png`,
+        shadowUrl: `${base}marker-shadow.png`,
       });
     };
     setupLeaflet();

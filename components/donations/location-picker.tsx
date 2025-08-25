@@ -43,17 +43,12 @@ export default function LocationPicker({ value, onChange, addressText, onGeocode
   useEffect(() => {
     const setupLeaflet = async () => {
       const L = (await import('leaflet')).default;
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const iconRetina = require('leaflet/dist/images/marker-icon-2x.png');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const icon = require('leaflet/dist/images/marker-icon.png');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const shadow = require('leaflet/dist/images/marker-shadow.png');
-
+      // Use absolute CDN URLs to be robust across Webpack/Turbopack builds
+      const base = 'https://unpkg.com/leaflet@1.9.4/dist/images/';
       L.Icon.Default.mergeOptions({
-        iconRetinaUrl: iconRetina,
-        iconUrl: icon,
-        shadowUrl: shadow,
+        iconRetinaUrl: `${base}marker-icon-2x.png`,
+        iconUrl: `${base}marker-icon.png`,
+        shadowUrl: `${base}marker-shadow.png`,
       });
       setReady(true);
     };
