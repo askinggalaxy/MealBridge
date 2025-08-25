@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
-import { DonationMap } from '@/components/donations/donation-map';
+// Map is now controlled by MapListContainer (shows/hides map based on selected tab)
+import { MapListContainer } from '@/components/donations/map-list-container';
 import { DonationList } from '@/components/donations/donation-list';
 import { DonationFilters } from '@/components/donations/donation-filters';
 import { Header } from '@/components/layout/header';
@@ -34,26 +35,11 @@ export default function HomePage() {
 
           {/* Main Content */}
           <div className="flex-1">
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="border-b border-gray-200">
-                <nav className="flex">
-                  <button className="px-6 py-3 text-sm font-medium text-green-600 border-b-2 border-green-600">
-                    Map View
-                  </button>
-                  <button className="px-6 py-3 text-sm font-medium text-gray-500 hover:text-gray-700">
-                    List View
-                  </button>
-                </nav>
-              </div>
-              
-              <div className="relative">
-                <Suspense fallback={<div className="h-96 bg-gray-100 animate-pulse"></div>}>
-                  <DonationMap />
-                </Suspense>
-              </div>
-            </div>
-            
-            <div className="mt-6">
+            {/* Tabs + Map area. MapListContainer hides the map when List View is active */}
+            <MapListContainer />
+
+            {/* List section; give it an id so the tab can scroll here */}
+            <div id="donation-list" className="mt-6">
               <Suspense fallback={<div className="space-y-4">
                 {[...Array(3)].map((_, i) => (
                   <div key={i} className="bg-white p-4 rounded-lg shadow-sm animate-pulse">
