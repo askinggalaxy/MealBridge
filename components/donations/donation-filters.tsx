@@ -56,8 +56,13 @@ export function DonationFilters() {
         </Label>
         <Slider
           value={distance}
-          onValueChange={setDistance}
-          max={25}
+          onValueChange={(vals) => {
+            // Update local state for immediate UI feedback
+            setDistance(vals);
+            // Apply instantly to URL so list/map react without clicking Apply
+            applyToUrl({ distance: vals[0] });
+          }}
+          max={50}
           min={1}
           step={1}
           className="w-full"
@@ -93,7 +98,14 @@ export function DonationFilters() {
       {/* Sort Filter */}
       <div>
         <Label className="text-sm font-medium mb-3 block">Sort By</Label>
-        <Select value={sortBy} onValueChange={setSortBy}>
+        <Select
+          value={sortBy}
+          onValueChange={(val) => {
+            setSortBy(val);
+            // Apply instantly so list/map update without clicking Apply
+            applyToUrl({ sort: val });
+          }}
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
