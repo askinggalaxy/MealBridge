@@ -18,7 +18,10 @@ type ReceivedReservation = Database['public']['Tables']['reservations']['Row'] &
   donations: Donation;
 };
 
-type Rating = Database['public']['Tables']['ratings']['Row'];
+// Enrich Rating with the rater's public profile so we can render avatar, name and link.
+type RatingWithRater = Database['public']['Tables']['ratings']['Row'] & {
+  rater: Pick<Profile, 'id' | 'display_name' | 'avatar_url'>;
+};
 
 export default async function PublicProfilePage({
   // Keep the param shape consistent with other dynamic routes in this app
@@ -74,18 +77,26 @@ export default async function PublicProfilePage({
     .order('created_at', { ascending: false })
     .limit(20);
 
-  // 4) Load ratings for this user (as the rated party)
+  // 4) Load ratings for this user (as the rated party), including the rater profile for UI
+  // Note: `profiles` is publicly readable (per RLS), so we can safely join basic public fields.
   const { data: ratings } = await supabase
     .from('ratings')
-    .select('*')
+    .select(`
+      *,
+      rater:rater_id (
+        id,
+        display_name,
+        avatar_url
+      )
+    `)
     .eq('rated_id', id)
     .order('created_at', { ascending: false })
-    .limit(20);
+    .limit(20) as { data: RatingWithRater[] | null };
 
   // Compute rating stats client-side
-  const ratingCount = ratings?.length ?? 0;
+  const ratingCount = (ratings as RatingWithRater[] | null)?.length ?? 0;
   const ratingAvg = ratingCount
-    ? (ratings!.reduce((sum, r) => sum + r.rating, 0) / ratingCount).toFixed(1)
+    ? ((ratings as RatingWithRater[])!.reduce((sum, r) => sum + r.rating, 0) / ratingCount).toFixed(1)
     : null;
 
   // Helper: initial letters for avatar fallback
@@ -288,31 +299,54 @@ export default async function PublicProfilePage({
               <CardTitle>Reviews</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!ratings?.length && (
+              {(!ratings || ratings.length === 0) && (
                 <p className="text-sm text-gray-500">No reviews yet.</p>
               )}
-              {ratings?.map((rev) => (
+              {(ratings as RatingWithRater[] | null)?.map((rev) => (
                 <div key={rev.id} className="border rounded-md p-3">
-                  <div className="flex items-center gap-2 text-yellow-700 mb-1">
-                    {Array.from({ length: 5 }, (_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${i < rev.rating ? 'fill-current' : ''}`}
-                      />
-                    ))}
+                  {/* Rater identity + star rating */}
+                  <div className="flex items-center justify-between mb-2">
+                    <Link
+                      href={`/users/${rev.rater?.id ?? ''}`}
+                      className="flex items-center gap-2 hover:underline"
+                    >
+                      <Avatar className="h-8 w-8">
+                        {rev.rater?.avatar_url && (
+                          <AvatarImage src={rev.rater.avatar_url} alt={rev.rater.display_name} />
+                        )}
+                        <AvatarFallback>
+                          {(rev.rater?.display_name ?? 'U').slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium text-gray-900">
+                        {rev.rater?.display_name ?? 'User'}
+                      </span>
+                    </Link>
+                    <div className="flex items-center gap-1 text-yellow-700">
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${i < rev.rating ? 'fill-current' : ''}`}
+                        />
+                      ))}
+                    </div>
                   </div>
+
+                  {/* Optional comment text */}
                   {rev.comment && (
-                    <p className="text-sm text-gray-700">{rev.comment}</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{rev.comment}</p>
                   )}
-                  <p className="text-xs text-gray-400 mt-1">
+
+                  {/* Timestamp of the review */}
+                  <p className="text-xs text-gray-400 mt-2">
                     {new Date(rev.created_at).toLocaleString()}
                   </p>
-                </div>)
-              )}
+                </div>
+              ))}
             </CardContent>
           </Card>
         </section>
-      </main>
-    </div>
-  );
+    </main>
+  </div>
+);
 }
