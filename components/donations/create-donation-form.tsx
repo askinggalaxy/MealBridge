@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -16,7 +16,10 @@ import { createClient } from '@/utils/supabase/client';
 import { toast } from 'sonner';
 import { Upload, X } from 'lucide-react';
 import { Database } from '@/lib/supabase/database.types';
+import LocationPicker, { LatLng } from '@/components/donations/location-picker';
 
+// NOTE: We prefer explicit typing and numeric lat/lng to avoid ambiguity.
+// We keep address_text for human-readable address, but location_lat/lng are used for precise map positioning and distance calc.
 const donationSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
@@ -28,6 +31,16 @@ const donationSchema = z.object({
   condition: z.enum(['sealed', 'open']),
   storage_type: z.enum(['ambient', 'refrigerated', 'frozen']),
   address_text: z.string().min(5, 'Please provide a pickup address'),
+  // Explicit numeric latitude/longitude, required to ensure precise pickup location is saved.
+  // In Zod v4, pass no options to number(); enforce bounds with chained validators.
+  location_lat: z
+    .number()
+    .min(-90, { message: 'Latitude must be >= -90' })
+    .max(90, { message: 'Latitude must be <= 90' }),
+  location_lng: z
+    .number()
+    .min(-180, { message: 'Longitude must be >= -180' })
+    .max(180, { message: 'Longitude must be <= 180' }),
   terms_accepted: z.boolean().refine(val => val === true, 'You must accept the terms'),
 });
 
@@ -48,6 +61,8 @@ export function CreateDonationForm() {
     defaultValues: {
       condition: 'sealed',
       storage_type: 'ambient',
+      // We do not set defaults for lat/lng; these must be chosen by the user (or set via geocoding)
+      // location_lat/location_lng will be populated when the user picks a point on the map.
       terms_accepted: false,
     },
   });
@@ -105,6 +120,8 @@ export function CreateDonationForm() {
     return uploadedUrls;
   };
 
+  // Real geocoding using OpenStreetMap Nominatim (no mocking). This can be used to pre-position the map
+  // based on the text address, but final coordinates should come from the user's explicit map selection when possible.
   const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number } | null> => {
     try {
       // Using OpenStreetMap Nominatim for geocoding (free)
@@ -139,19 +156,28 @@ export function CreateDonationForm() {
       // Upload images
       const imageUrls = await uploadImages();
 
-      // Geocode address
-      const coordinates = await geocodeAddress(data.address_text);
-      if (!coordinates) {
-        toast.error('Could not find location. Please check your address.');
-        return;
+      // We require precise coordinates. If the user somehow bypassed map selection, we try to geocode once.
+      // However, the form schema already enforces lat/lng presence; this is a safety net.
+      let finalCoords: { lat: number; lng: number } = { lat: data.location_lat, lng: data.location_lng };
+      if (
+        (typeof finalCoords.lat !== 'number' || Number.isNaN(finalCoords.lat)) ||
+        (typeof finalCoords.lng !== 'number' || Number.isNaN(finalCoords.lng))
+      ) {
+        const coordinates = await geocodeAddress(data.address_text);
+        if (!coordinates) {
+          toast.error('Could not determine coordinates. Please select location on the map.');
+          return;
+        }
+        finalCoords = coordinates;
       }
 
       // Create donation
       const donationData = {
         ...data,
         donor_id: user.id,
-        location_lat: coordinates.lat,
-        location_lng: coordinates.lng,
+        // Use explicit numeric coordinates from the map (or geocoding fallback above)
+        location_lat: finalCoords.lat,
+        location_lng: finalCoords.lng,
         images: imageUrls,
         expiry_date: data.expiry_date,
         pickup_window_start: new Date(data.pickup_window_start).toISOString(),
@@ -341,6 +367,7 @@ export function CreateDonationForm() {
               <Label htmlFor="address_text">Pickup Address *</Label>
               <Input
                 id="address_text"
+                // We keep human-readable address, but coordinates are authoritative for distance.
                 {...form.register('address_text')}
                 placeholder="Enter the pickup address"
               />
@@ -349,6 +376,45 @@ export function CreateDonationForm() {
                   {form.formState.errors.address_text.message}
                 </p>
               )}
+              {/*
+                Map Location Picker: allows precise selection by dragging a marker.
+                - It initializes from the current lat/lng if available, or geocodes the typed address.
+                - It updates hidden numeric fields 'location_lat' and 'location_lng' in the form.
+              */}
+              <div className="mt-4">
+                <LocationPicker
+                  value={useMemo<LatLng | null>(() => {
+                    const lat = form.getValues('location_lat');
+                    const lng = form.getValues('location_lng');
+                    return typeof lat === 'number' && typeof lng === 'number' && !Number.isNaN(lat) && !Number.isNaN(lng)
+                      ? { lat, lng }
+                      : null;
+                  }, [form.watch('location_lat'), form.watch('location_lng')])}
+                  onChange={(coord) => {
+                    // Persist numeric coordinates into the form state with validation
+                    form.setValue('location_lat', coord.lat, { shouldDirty: true, shouldValidate: true });
+                    form.setValue('location_lng', coord.lng, { shouldDirty: true, shouldValidate: true });
+                  }}
+                  addressText={form.watch('address_text')}
+                  onGeocodeError={(msg) => toast.warning(msg)}
+                  className="mt-2"
+                />
+
+                {/* Hidden inputs registered as numbers to satisfy schema and RHF */}
+                <input type="hidden" {...form.register('location_lat', { valueAsNumber: true })} />
+                <input type="hidden" {...form.register('location_lng', { valueAsNumber: true })} />
+
+                {(form.formState.errors as any).location_lat && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {(form.formState.errors as any).location_lat.message as string}
+                  </p>
+                )}
+                {(form.formState.errors as any).location_lng && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {(form.formState.errors as any).location_lng.message as string}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
