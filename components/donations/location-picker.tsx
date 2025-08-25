@@ -38,6 +38,9 @@ export default function LocationPicker({ value, onChange, addressText, onGeocode
   const [internal, setInternal] = useState<LatLng | null>(value ?? null);
   const initializedRef = useRef(false);
   const lastGeocodeValueRef = useRef<string | null>(null);
+  // This flag instructs the map to change zoom ONLY on the next center (e.g., after geocoding or locate-me).
+  // For marker drag/click updates we want to keep the user's current zoom, so we will not set this flag.
+  const zoomNextRef = useRef<boolean>(false);
 
   // Setup Leaflet marker icons correctly on the client (prevents missing icon issues in bundlers)
   useEffect(() => {
@@ -93,6 +96,8 @@ export default function LocationPicker({ value, onChange, addressText, onGeocode
       lastGeocodeValueRef.current = current;
       if (result) {
         initializedRef.current = true;
+        // We intend to focus and zoom in on the new geocoded position once.
+        zoomNextRef.current = true;
         setInternal(result);
         onChange(result);
       } else if (onGeocodeError) {
@@ -108,6 +113,8 @@ export default function LocationPicker({ value, onChange, addressText, onGeocode
     const lng = e.target.getLatLng().lng as number;
     const coord = { lat, lng };
     initializedRef.current = true;
+    // When user drags the marker, keep the current zoom level (do not zoom).
+    zoomNextRef.current = false;
     setInternal(coord);
     onChange(coord);
   };
@@ -119,7 +126,15 @@ export default function LocationPicker({ value, onChange, addressText, onGeocode
     const map = useMap();
     useEffect(() => {
       if (position) {
-        map.setView([position.lat, position.lng], zoomLevel, { animate: true });
+        // If we just geocoded or used "Use my location", zoom once to the provided zoom level.
+        // Otherwise, preserve the user's current zoom and only pan the map to the new center.
+        if (zoomNextRef.current) {
+          map.setView([position.lat, position.lng], zoomLevel, { animate: true });
+          zoomNextRef.current = false;
+        } else {
+          // panTo keeps the current zoom unchanged which avoids the annoying zoom reset on marker moves
+          map.panTo([position.lat, position.lng], { animate: true });
+        }
       }
     }, [map, position, zoomLevel]);
     return null;
@@ -174,6 +189,8 @@ export default function LocationPicker({ value, onChange, addressText, onGeocode
           onClick={(e: any) => {
             const coord = { lat: e.latlng.lat as number, lng: e.latlng.lng as number };
             initializedRef.current = true;
+            // For map click placement, also keep the existing zoom level.
+            zoomNextRef.current = false;
             setInternal(coord);
             onChange(coord);
           }}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -67,15 +67,19 @@ export function CreateDonationForm() {
     },
   });
 
-  // Reverse geocoder: translate lat/lng -> human-readable address (no mocking; uses OSM Nominatim)
+  // Reverse geocoder: translate lat/lng -> human-readable address using our server proxy
+  // Calling our Next.js API avoids client-side CORS/timeouts and includes a compliant User-Agent to Nominatim.
   const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
     try {
-      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-      const data = await res.json();
-      // Nominatim returns display_name for a nice, readable address
+      const url = `/api/geocode/reverse?lat=${lat}&lng=${lng}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) {
+        console.warn('[CreateDonationForm] reverse proxy error', res.status);
+        return null;
+      }
+      const data: { display_name?: string | null } = await res.json();
       if (data && typeof data.display_name === 'string' && data.display_name.length > 0) {
-        return data.display_name as string;
+        return data.display_name;
       }
     } catch (e) {
       console.error('Reverse geocoding failed:', e);
@@ -83,27 +87,44 @@ export function CreateDonationForm() {
     return null;
   };
 
-  // Subscribe to RHF value changes so when user picks a point on the map, we auto-populate the address text box.
+  // Subscribe to RHF value changes so when user picks a point on the map, we auto-populate the address.
+  // Debounced and deduplicated to avoid triggering twice (lat then lng).
   useEffect(() => {
-    const subscription = form.watch(async (_values, info) => {
+    const timerRef = { current: null as ReturnType<typeof setTimeout> | null };
+    const lastRef = { current: null as { lat: number; lng: number } | null };
+
+    const subscription = form.watch((_values, info) => {
       if (!info || !info.name) return;
       if (info.name !== 'location_lat' && info.name !== 'location_lng') return;
 
-      const lat = form.getValues('location_lat');
-      const lng = form.getValues('location_lng');
-      if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(async () => {
+        const lat = form.getValues('location_lat');
+        const lng = form.getValues('location_lng');
+        if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) return;
 
-      console.log('[CreateDonationForm] watched lat/lng changed', { lat, lng });
-      const currentAddress = form.getValues('address_text');
-      // Always update the visible address from the map selection, per request.
-      console.log('[CreateDonationForm] reverse geocoding for', { lat, lng });
-      const addr = await reverseGeocode(lat, lng);
-      console.log('[CreateDonationForm] reverse geocode result', addr);
-      if (addr) {
-        form.setValue('address_text', addr, { shouldDirty: true, shouldValidate: true });
-      }
+        // Skip if coordinates unchanged
+        if (lastRef.current && lastRef.current.lat === lat && lastRef.current.lng === lng) return;
+        lastRef.current = { lat, lng };
+
+        console.log('[CreateDonationForm] watched lat/lng changed', { lat, lng });
+        console.log('[CreateDonationForm] reverse geocoding for', { lat, lng });
+        const addr = await reverseGeocode(lat, lng);
+        console.log('[CreateDonationForm] reverse geocode result', addr);
+        if (addr) {
+          form.setValue('address_text', addr, { shouldDirty: true, shouldValidate: true });
+        } else {
+          const coordText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          form.setValue('address_text', coordText, { shouldDirty: true, shouldValidate: true });
+          toast.warning('Could not fetch address right now. Using coordinates instead.');
+        }
+      }, 400);
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      subscription.unsubscribe();
+    };
   }, [form]);
 
   useEffect(() => {
