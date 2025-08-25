@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic';
 import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { useSearchParams } from 'next/navigation';
+// useMap must be statically imported
+import { useMap } from 'react-leaflet';
 
 // Dynamic import to avoid SSR issues with Leaflet
 const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
@@ -35,6 +37,42 @@ export function DonationMap() {
 
   const supabase = createClient();
   const searchParams = useSearchParams();
+
+  // Local counter to trigger recenter side-effect
+  const [recenterTick, setRecenterTick] = useState<number>(0);
+
+  // Helper component to recenter/zoom the map on demand using useMap
+  function RecenterControl({ center, trigger }: { center: [number, number] | null; trigger: number }) {
+    const map = useMap();
+    useEffect(() => {
+      if (center) {
+        // Keep a friendly zoom level when recentering to the user
+        map.setView(center, Math.max(map.getZoom(), 13), { animate: true });
+      }
+    }, [center, trigger, map]);
+    return null;
+  }
+
+  // Haversine distance (km) between two points; explicit types for clarity
+  const distanceKm = (a: [number, number], b: [number, number]): number => {
+    const R = 6371; // km
+    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+    const lat1 = (a[0] * Math.PI) / 180;
+    const lat2 = (b[0] * Math.PI) / 180;
+    const sinDLat = Math.sin(dLat / 2);
+    const sinDLon = Math.sin(dLon / 2);
+    const c = 2 * Math.asin(Math.sqrt(sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon));
+    return R * c;
+  };
+
+  // Read distance filter from URL (in km); default 5km
+  const radiusKm = Number(searchParams.get('distance') ?? 5);
+
+  // Filter donations by distance if we have user's location
+  const donationsInRadius: Donation[] = userLocation
+    ? donations.filter((d) => distanceKm(userLocation, [d.location_lat, d.location_lng]) <= radiusKm)
+    : donations;
 
   useEffect(() => {
     // 1) Dynamically import Leaflet on the client to avoid SSR issues with Leaflet
@@ -229,12 +267,21 @@ export function DonationMap() {
           style={{ height: '100%', width: '100%' }}
           className="z-0"
         >
+          {/* Recenter controller listens for trigger increments and recenters to userLocation */}
+          <RecenterControl center={userLocation} trigger={recenterTick} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {donations.map((donation) => (
+          {/* Optional marker showing user's current location */}
+          {userLocation && (
+            <Marker position={userLocation}>
+              <Popup>Locația ta</Popup>
+            </Marker>
+          )}
+
+          {donationsInRadius.map((donation) => (
             <Marker
               key={donation.id}
               position={[donation.location_lat, donation.location_lng]}
@@ -273,6 +320,23 @@ export function DonationMap() {
         <div className="absolute bottom-2 left-2 bg-white/80 text-xs text-gray-700 px-2 py-1 rounded shadow">
           Se încarcă ofertele din apropiere...
         </div>
+      )}
+
+      {/* Floating button to center on user's location, visible when map is shown */}
+      {geoState === 'granted' && (
+        <button
+          onClick={() => {
+            // If we don't have coords yet, request them; else just recenter
+            if (!userLocation) {
+              requestGeolocation();
+            } else {
+              setRecenterTick((n) => n + 1);
+            }
+          }}
+          className="absolute top-2 right-2 z-[1000] px-3 py-1.5 rounded bg-green-600 text-white text-sm shadow hover:bg-green-700"
+        >
+          Locația mea
+        </button>
       )}
     </div>
   );

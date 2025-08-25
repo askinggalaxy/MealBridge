@@ -110,7 +110,11 @@ export function DonationCard({ donation }: DonationCardProps) {
           
           <div className="flex items-center gap-2 text-gray-600">
             <MapPin className="w-4 h-4" />
-            <span className="truncate">{donation.profiles.neighborhood || 'Location set'}</span>
+            <span className="truncate">
+              {donation.address_text && donation.address_text.trim().length > 0
+                ? donation.address_text
+                : `${Number(donation.location_lat).toFixed(4)}, ${Number(donation.location_lng).toFixed(4)}`}
+            </span>
           </div>
           
           <div className="flex items-center gap-2 text-gray-600">

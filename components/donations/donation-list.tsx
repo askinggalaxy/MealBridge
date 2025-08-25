@@ -19,8 +19,43 @@ export function DonationList() {
   const supabase = createClient();
   const searchParams = useSearchParams();
 
+  // User location used for distance filter/sort; we only set when permission is granted
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+  // Haversine distance helper (km)
+  const distanceKm = (a: [number, number], b: [number, number]): number => {
+    const R = 6371; // km
+    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+    const lat1 = (a[0] * Math.PI) / 180;
+    const lat2 = (b[0] * Math.PI) / 180;
+    const sinDLat = Math.sin(dLat / 2);
+    const sinDLon = Math.sin(dLon / 2);
+    const c = 2 * Math.asin(Math.sqrt(sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon));
+    return R * c;
+  };
+
   useEffect(() => {
+    // Try to get geolocation if permission is already granted so we can filter/sort by distance.
+    const maybeGetLocation = async () => {
+      try {
+        if ('permissions' in navigator && (navigator as any).permissions?.query) {
+          const status = await (navigator as any).permissions.query({ name: 'geolocation' as PermissionName });
+          if (status.state === 'granted') {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => setUserLocation([pos.coords.latitude, pos.coords.longitude]),
+              () => void 0,
+              { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+            );
+          }
+        }
+      } catch (_) {
+        // ignore; distance filtering will simply be skipped
+      }
+    };
+
     // When URL filters change, reload list
+    maybeGetLocation();
     loadDonations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams?.toString()]);
@@ -60,7 +95,32 @@ export function DonationList() {
     if (error) {
       console.error('Error loading donations:', error);
     } else {
-      setDonations(data as Donation[]);
+      // Apply client-side filters based on URL params
+      const sealedOnly = (searchParams.get('sealed') ?? 'false') === 'true';
+      const sortBy = searchParams.get('sort') ?? 'newest';
+      const radiusKm = Number(searchParams.get('distance') ?? 5);
+
+      let items = (data as Donation[]).filter((d) => (sealedOnly ? d.condition === 'sealed' : true));
+
+      // Filter by distance if we have user's location
+      if (userLocation) {
+        items = items.filter((d) => distanceKm(userLocation, [d.location_lat, d.location_lng]) <= radiusKm);
+
+        // Optional: sort by distance if requested
+        if (sortBy === 'distance') {
+          items.sort((a, b) =>
+            distanceKm(userLocation, [a.location_lat, a.location_lng]) -
+            distanceKm(userLocation, [b.location_lat, b.location_lng])
+          );
+        }
+      } else {
+        // If we cannot compute distance, fall back to existing server order
+        if (sortBy === 'expiry') {
+          items.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
+        } // 'newest' is already enforced by server order
+      }
+
+      setDonations(items);
     }
     
     setLoading(false);
