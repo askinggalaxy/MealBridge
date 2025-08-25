@@ -6,6 +6,17 @@ import Link from "next/link";
 // Includes accessible markup and Tailwind classes for a clean look.
 // Per user preference, we add clear code comments to explain each part.
 export function Footer(): JSX.Element {
+  // When the user clicks the "Cookie Preferences" link, we dispatch a
+  // custom event that our CookieConsent component listens to. This opens
+  // the preferences modal so users can update their choices anytime.
+  const openCookiePreferences = (): void => {
+    try {
+      window.dispatchEvent(new Event("open-cookie-preferences"));
+    } catch {
+      // no-op; older browsers should still support Event()
+    }
+  };
+
   return (
     <footer className="border-t bg-white">
       {/* Constrain the content width and add spacing */}
@@ -40,6 +51,16 @@ export function Footer(): JSX.Element {
                   Contact
                 </Link>
               </li>
+              {/* Button-styled link to open cookie preferences modal */}
+              <li>
+                <button
+                  type="button"
+                  onClick={openCookiePreferences}
+                  className="text-gray-600 hover:text-gray-900 hover:underline"
+                >
+                  Cookie Preferences
+                </button>
+              </li>
             </ul>
           </nav>
         </div>
@@ -54,3 +75,4 @@ export function Footer(): JSX.Element {
     </footer>
   );
 }
+

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 // useMap must be statically imported
 import { useMap } from 'react-leaflet';
 
@@ -37,6 +38,7 @@ export function DonationMap() {
 
   const supabase = createClient();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Local counter to trigger recenter side-effect
   const [recenterTick, setRecenterTick] = useState<number>(0);
@@ -285,10 +287,17 @@ export function DonationMap() {
             <Marker
               key={donation.id}
               position={[donation.location_lat, donation.location_lng]}
+              eventHandlers={{
+                dblclick: () => router.push(`/donations/${donation.id}`),
+              }}
             >
               <Popup>
                 <div className="p-2 min-w-48">
-                  <h3 className="font-semibold text-sm mb-1">{donation.title}</h3>
+                  <h3 className="font-semibold text-sm mb-1">
+                    <Link href={`/donations/${donation.id}`} className="hover:underline">
+                      {donation.title}
+                    </Link>
+                  </h3>
                   <p className="text-xs text-gray-600 mb-2">{donation.description}</p>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-green-600 font-medium">
@@ -307,6 +316,14 @@ export function DonationMap() {
                         ⭐ {donation.profiles.reputation_score.toFixed(1)} ({donation.profiles.reputation_count})
                       </span>
                     )}
+                  </div>
+                  <div className="mt-3">
+                    <Link
+                      href={`/donations/${donation.id}`}
+                      className="inline-flex items-center text-xs px-2 py-1 rounded bg-green-600 !text-white no-underline hover:bg-green-700"
+                    >
+                      View Details
+                    </Link>
                   </div>
                 </div>
               </Popup>

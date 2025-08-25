@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
 import { Footer } from '@/components/layout/footer';
+import { CookieConsent } from '@/components/privacy/cookie-consent';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -21,6 +22,8 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         {children}
+        {/* GDPR cookie consent banner + preferences */}
+        <CookieConsent />
         {/* Global site footer with important links */}
         <Footer />
         <Toaster />
