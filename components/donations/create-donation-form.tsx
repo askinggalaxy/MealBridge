@@ -67,6 +67,45 @@ export function CreateDonationForm() {
     },
   });
 
+  // Reverse geocoder: translate lat/lng -> human-readable address (no mocking; uses OSM Nominatim)
+  const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      // Nominatim returns display_name for a nice, readable address
+      if (data && typeof data.display_name === 'string' && data.display_name.length > 0) {
+        return data.display_name as string;
+      }
+    } catch (e) {
+      console.error('Reverse geocoding failed:', e);
+    }
+    return null;
+  };
+
+  // Subscribe to RHF value changes so when user picks a point on the map, we auto-populate the address text box.
+  useEffect(() => {
+    const subscription = form.watch(async (_values, info) => {
+      if (!info || !info.name) return;
+      if (info.name !== 'location_lat' && info.name !== 'location_lng') return;
+
+      const lat = form.getValues('location_lat');
+      const lng = form.getValues('location_lng');
+      if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+      console.log('[CreateDonationForm] watched lat/lng changed', { lat, lng });
+      const currentAddress = form.getValues('address_text');
+      // Always update the visible address from the map selection, per request.
+      console.log('[CreateDonationForm] reverse geocoding for', { lat, lng });
+      const addr = await reverseGeocode(lat, lng);
+      console.log('[CreateDonationForm] reverse geocode result', addr);
+      if (addr) {
+        form.setValue('address_text', addr, { shouldDirty: true, shouldValidate: true });
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
   useEffect(() => {
     loadCategories();
   }, []);
