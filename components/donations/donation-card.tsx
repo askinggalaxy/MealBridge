@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Calendar, Clock, MapPin, Star, User } from 'lucide-react';
 import { Database } from '@/lib/supabase/database.types';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type Donation = Database['public']['Tables']['donations']['Row'] & {
@@ -35,6 +35,17 @@ export function DonationCard({ donation }: DonationCardProps) {
       case 'frozen': return '🧊';
       default: return '🌡️';
     }
+  };
+
+  // Helper to format date/time for the pickup window, following the requested style:
+  // Example: "AUG 25, 8:45 PM" (no year, no seconds, MONTH in uppercase)
+  const formatPickupMoment = (iso: string): string => {
+    const d = new Date(iso);
+    // Month+day part (e.g., "AUG 25") uppercased for emphasis
+    const dayPart = format(d, 'MMM d').toUpperCase();
+    // Time part without seconds (e.g., "8:45 PM")
+    const timePart = format(d, 'h:mm a');
+    return `${dayPart}, ${timePart}`;
   };
 
   return (
@@ -76,7 +87,8 @@ export function DonationCard({ donation }: DonationCardProps) {
               <img
                 src={donation.images[0]}
                 alt={donation.title}
-                className="w-16 h-16 object-cover rounded-md"
+                // Larger thumbnails for better visual impact in 2-col grid
+                className="w-20 h-20 md:w-28 md:h-28 object-cover rounded-md"
                 onError={() => setImageError(true)}
               />
             </div>
@@ -123,16 +135,18 @@ export function DonationCard({ donation }: DonationCardProps) {
           </div>
           
           <div className="flex items-center gap-2 text-gray-600">
-            <Clock className="w-4 h-4" />
             <span>{getStorageIcon(donation.storage_type)} {donation.condition}</span>
           </div>
         </div>
 
         <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-700">
-            <strong>Pickup:</strong> {' '}
-            {new Date(donation.pickup_window_start).toLocaleString()} - {' '}
-            {new Date(donation.pickup_window_end).toLocaleString()}
+          <p className="text-sm text-gray-700 flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            <span>
+              <strong>Pickup:</strong>{' '}
+              {formatPickupMoment(donation.pickup_window_start)}{' '}-
+              {' '}{formatPickupMoment(donation.pickup_window_end)}
+            </span>
           </p>
         </div>
       </CardContent>

@@ -224,8 +224,8 @@ export default function PrivacyPolicyPage() {
             {/* Disclaimer */}
             <section className="rounded-xl bg-amber-50 p-4 text-amber-900 ring-1 ring-amber-200">
               <p className="text-sm">
-                <span className="font-semibold">Note:</span> This page is a general template tailored for MealBridge and does not constitute legal advice.
-                Please review with counsel to ensure compliance with your specific operations and jurisdictions.
+                <span className="font-semibold">A community initiative to reduce food waste.</span> 
+               
               </p>
             </section>
           </div>

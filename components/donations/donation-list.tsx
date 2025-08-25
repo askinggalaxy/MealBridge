@@ -150,7 +150,7 @@ export function DonationList() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold mb-4">Nearby Food ({donations.length})</h2>
+      <h2 className="text-xl font-semibold mb-2">Nearby Food ({donations.length})</h2>
       {donations.some((d) => d.status !== 'available') && (
         <Alert className="bg-blue-50 border-blue-200 text-blue-900">
           <Info className="h-4 w-4" />
@@ -159,18 +159,18 @@ export function DonationList() {
           </AlertDescription>
         </Alert>
       )}
-      {donations.map((donation) => (
-        <div
-          key={donation.id}
-          className={
-            donation.status === 'available'
-              ? ''
-              : 'opacity-70'
-          }
-        >
-          <DonationCard donation={donation} />
-        </div>
-      ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {donations.map((donation) => (
+          <div
+            key={donation.id}
+            className={
+              donation.status === 'available' ? '' : 'opacity-70'
+            }
+          >
+            <DonationCard donation={donation} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
