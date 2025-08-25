@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Database } from '@/lib/supabase/database.types';
 import ReservationActions from '@/components/reservations/reservation-actions';
+import { ReviewButton } from '@/components/reviews/review-button';
 
 // Types from generated Database
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -132,6 +133,22 @@ export default async function ReservationsPage() {
                 currentStatus={r.status as any}
               />)
             }
+
+            {/* Review button: real eligibility checks are performed inside the client component.
+               It verifies there is a completed reservation, identifies the counterpart
+               (donor vs recipient), ensures there is no existing rating, and only then shows. */}
+            <div className="mt-3">
+              <ReviewButton
+                donationId={d.id}
+                currentUserId={user.id}
+                donorId={donor?.id ?? ''}
+                recipientId={recip?.id ?? null}
+                reservationStatus={r.status as any}
+                size="sm"
+                className="bg-amber-500 hover:bg-amber-600"
+                label="Leave review"
+              />
+            </div>
           </div>
           <div className="ml-4 flex-shrink-0">
             <Link href={`/donations/${d?.id}`}>

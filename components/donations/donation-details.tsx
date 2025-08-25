@@ -13,6 +13,7 @@ import { Database } from '@/lib/supabase/database.types';
 import { toast } from 'sonner';
 import { ReservationDialog } from './reservation-dialog';
 import { ChatDialog } from './chat-dialog';
+import { ReviewButton } from '@/components/reviews/review-button';
 import { formatDistanceToNow, format } from 'date-fns';
 
 type Donation = Database['public']['Tables']['donations']['Row'] & {
@@ -45,15 +46,30 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
   const checkExistingReservation = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { data } = await supabase
+    
+    // Recipient path: if the current user is a recipient who reserved this donation,
+    // load their reservation (any status). This preserves existing UX showing pending/accepted/declined.
+    const { data: myResv } = await supabase
       .from('reservations')
       .select('*')
       .eq('donation_id', donation.id)
       .eq('recipient_id', user.id)
-      .single();
+      .maybeSingle();
 
-    setReservation(data);
+    // Donor path: if current user is the donor, we still want to surface the FIRST completed reservation
+    // (if any) so that the ReviewButton can determine counterpart (the recipient) and show the button.
+    let donorCompleted: any = null;
+    if (user.id === donation.donor_id) {
+      const { data: completedList } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('donation_id', donation.id)
+        .eq('status', 'completed');
+      donorCompleted = (completedList ?? [])[0] ?? null;
+    }
+
+    // Prefer recipient-specific reservation when available, otherwise fallback to donor's completed one.
+    setReservation(myResv ?? donorCompleted ?? null);
   };
 
   const getExpiryColor = (expiryDate: string) => {
@@ -257,6 +273,22 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
                         <MessageCircle className="w-4 h-4 mr-2" />
                         Message
                       </Button>
+                    )}
+
+                    {/* Review button: visible for donor or recipient only when eligible.
+                       The component performs real checks against Supabase: existing rating,
+                       completed reservation, and counterpart identity. If a review already
+                       exists, it will not render. */}
+                    {user && (
+                      <ReviewButton
+                        donationId={donation.id}
+                        currentUserId={user.id}
+                        donorId={donation.donor_id}
+                        recipientId={reservation?.recipient_id ?? null}
+                        reservationStatus={reservation?.status}
+                        className="w-full bg-amber-500 hover:bg-amber-600"
+                        label="Leave review"
+                      />
                     )}
                   </div>
                 )}
