@@ -132,6 +132,37 @@ export default async function PublicProfilePage({
     }
   };
 
+  // Helper: format remaining time until a given ISO date string.
+  // - Returns short, human-friendly text like "2d 4h left" or "3h 20m left" or "< 1h left".
+  // - If the time is past, returns "expired" (defensive; the backend should already set status="expired").
+  const formatTimeUntil = (isoDate: string): string => {
+    // Explicit parsing to Date for server-side rendering context
+    const now: Date = new Date();
+    const target: Date = new Date(isoDate);
+    const diffMs: number = target.getTime() - now.getTime();
+
+    if (Number.isNaN(target.getTime())) {
+      // If invalid date, avoid throwing and return a neutral label
+      return 'unknown';
+    }
+
+    if (diffMs <= 0) return 'expired';
+
+    // Derive days/hours/minutes from milliseconds difference
+    const totalMinutes: number = Math.floor(diffMs / (1000 * 60));
+    const days: number = Math.floor(totalMinutes / (60 * 24));
+    const hours: number = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes: number = totalMinutes % 60;
+
+    if (days > 0) {
+      return `${days}d ${hours}h left`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${minutes}m left`;
+    }
+    return minutes > 0 ? `${minutes}m left` : '< 1m left';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top navigation menu/header */}
@@ -202,6 +233,12 @@ export default async function PublicProfilePage({
                       <div>
                         <p className="font-medium">{d.title}</p>
                         <p className="text-xs text-gray-500">{d.categories?.name}</p>
+                        {/* Expiry info: only emphasize for available donations so users can act in time */}
+                        {d.status === 'available' && (
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            Expires in {formatTimeUntil(d.expiry_date)}
+                          </p>
+                        )}
                       </div>
                     </Link>
                     <div className="text-xs">
