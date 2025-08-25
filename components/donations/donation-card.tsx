@@ -135,7 +135,8 @@ export function DonationCard({ donation }: DonationCardProps) {
           </div>
           
           <div className="flex items-center gap-2 text-gray-600">
-            <span>{getStorageIcon(donation.storage_type)} {donation.condition}</span>
+            {/* Show condition-specific icon (match detail page): box for sealed, folder for opened */}
+            <span>{donation.condition === 'sealed' ? '📦' : '📂'} {donation.condition}</span>
           </div>
         </div>
 

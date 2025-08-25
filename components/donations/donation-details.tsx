@@ -13,7 +13,7 @@ import { Database } from '@/lib/supabase/database.types';
 import { toast } from 'sonner';
 import { ReservationDialog } from './reservation-dialog';
 import { ChatDialog } from './chat-dialog';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 
 type Donation = Database['public']['Tables']['donations']['Row'] & {
   profiles: Database['public']['Tables']['profiles']['Row'];
@@ -73,6 +73,14 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
 
   const canReserve = user && user.id !== donation.donor_id && !reservation && donation.status === 'available';
   const isOwner = user && user.id === donation.donor_id;
+
+  // Helper to format date/time like listing cards, e.g., "AUG 25, 8:45 PM"
+  const formatPickupMoment = (iso: string): string => {
+    const d = new Date(iso);
+    const dayPart = format(d, 'MMM d').toUpperCase();
+    const timePart = format(d, 'h:mm a');
+    return `${dayPart}, ${timePart}`;
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -166,10 +174,10 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
                     <span className="font-medium">Available for pickup:</span>
                   </div>
                   <p className="text-sm text-gray-700">
-                    <strong>From:</strong> {new Date(donation.pickup_window_start).toLocaleString()}
+                    <strong>From:</strong> {formatPickupMoment(donation.pickup_window_start)}
                   </p>
                   <p className="text-sm text-gray-700">
-                    <strong>Until:</strong> {new Date(donation.pickup_window_end).toLocaleString()}
+                    <strong>Until:</strong> {formatPickupMoment(donation.pickup_window_end)}
                   </p>
                 </div>
               </div>
