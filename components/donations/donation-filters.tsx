@@ -102,7 +102,7 @@ export function DonationFilters() {
           value={sortBy}
           onValueChange={(val) => {
             setSortBy(val);
-            // Apply instantly so list/map update without clicking Apply
+            // Apply instantly so list/map update without extra click
             applyToUrl({ sort: val });
           }}
         >

@@ -54,11 +54,11 @@ export function DonationList() {
       }
     };
 
-    // When URL filters change, reload list
+    // When URL filters change OR userLocation resolves, reload list
     maybeGetLocation();
     loadDonations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams?.toString()]);
+  }, [searchParams?.toString(), JSON.stringify(userLocation)]);
 
   const loadDonations = async () => {
     setLoading(true);
@@ -105,20 +105,19 @@ export function DonationList() {
       // Filter by distance if we have user's location
       if (userLocation) {
         items = items.filter((d) => distanceKm(userLocation, [d.location_lat, d.location_lng]) <= radiusKm);
-
-        // Optional: sort by distance if requested
-        if (sortBy === 'distance') {
-          items.sort((a, b) =>
-            distanceKm(userLocation, [a.location_lat, a.location_lng]) -
-            distanceKm(userLocation, [b.location_lat, b.location_lng])
-          );
-        }
-      } else {
-        // If we cannot compute distance, fall back to existing server order
-        if (sortBy === 'expiry') {
-          items.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
-        } // 'newest' is already enforced by server order
       }
+
+      // Apply sorting preference
+      if (sortBy === 'distance' && userLocation) {
+        // Sort ascending by distance when available
+        items.sort((a, b) =>
+          distanceKm(userLocation, [a.location_lat, a.location_lng]) -
+          distanceKm(userLocation, [b.location_lat, b.location_lng])
+        );
+      } else if (sortBy === 'expiry') {
+        // Always sort by earliest expiry first (soonest)
+        items.sort((a, b) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime());
+      } // 'newest' is already enforced by server order
 
       setDonations(items);
     }
