@@ -18,6 +18,66 @@ import { Upload, X, Camera } from 'lucide-react';
 import { Database } from '@/lib/supabase/database.types';
 import LocationPicker, { LatLng } from '@/components/donations/location-picker';
 
+/**
+ * Client-side image compressor.
+ * Purpose: shrink very large photos before sending to the AI intake endpoint to reduce latency and bandwidth.
+ * Notes:
+ * - We DO NOT modify the originals kept in state; storage uploads continue to use original files.
+ * - We convert to JPEG with quality 0.75 and clamp the longer edge to 1280px to keep enough detail for recognition.
+ */
+async function compressImageFile(
+  file: File,
+  opts: { maxW?: number; maxH?: number; quality?: number } = {}
+): Promise<File> {
+  const maxW = opts.maxW ?? 1280; // maximum width in pixels
+  const maxH = opts.maxH ?? 1280; // maximum height in pixels
+  const quality = opts.quality ?? 0.75; // JPEG quality between 0 and 1
+
+  // If the file is already small (< 2.5MB) we can skip heavy processing to save CPU on mobile.
+  // Threshold chosen pragmatically; adjust if needed.
+  const SMALL_THRESHOLD = 2.5 * 1024 * 1024;
+  if (file.size <= SMALL_THRESHOLD) return file;
+
+  // Load image into a bitmap or HTMLImageElement
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error || new Error('Failed to read image'));
+    reader.readAsDataURL(file);
+  });
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to load image'));
+    image.src = dataUrl;
+  });
+
+  // Compute target dimensions while preserving aspect ratio
+  let { width, height } = img;
+  const ratio = Math.min(maxW / width, maxH / height, 1); // never upscale
+  const targetW = Math.round(width * ratio);
+  const targetH = Math.round(height * ratio);
+
+  // Draw into an in-memory canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return file; // Fallback: if no 2D context (very rare), use original
+  ctx.drawImage(img, 0, 0, targetW, targetH);
+
+  // Convert to JPEG blob
+  const blob: Blob | null = await new Promise((resolve) =>
+    canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
+  );
+  if (!blob) return file; // On failure, fallback to original
+
+  // Preserve a meaningful filename extension
+  const newName = (file.name.replace(/\.(png|jpeg|jpg|webp|gif)$/i, '') || 'photo') + '.jpg';
+  return new File([blob], newName, { type: 'image/jpeg', lastModified: Date.now() });
+}
+
 // NOTE: We prefer explicit typing and numeric lat/lng to avoid ambiguity.
 // We keep address_text for human-readable address, but location_lat/lng are used for precise map positioning and distance calc.
 const donationSchema = z.object({
@@ -179,12 +239,21 @@ export function CreateDonationForm() {
 
     try {
       for (const image of images) {
-        const fileExt = image.name.split('.').pop();
+        // Compress originals before storage to save space and bandwidth.
+        // Use a slightly higher quality for persisted images.
+        let toUpload: File = image;
+        try {
+          toUpload = await compressImageFile(image, { maxW: 1600, maxH: 1600, quality: 0.85 });
+        } catch (e) {
+          console.warn('Storage compression failed; using original', e);
+        }
+
+        const fileExt = (toUpload.name.split('.').pop() || 'jpg').toLowerCase();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        
+
         const { data, error } = await supabase.storage
           .from('donation-images')
-          .upload(fileName, image);
+          .upload(fileName, toUpload);
 
         if (error) {
           throw error;
@@ -353,8 +422,20 @@ export function CreateDonationForm() {
       }
       setAiLoading(true);
       const fd = new FormData();
-      // Append raw files; API will convert and send to OpenAI. We avoid uploading to storage at this stage.
-      images.forEach(img => fd.append('images', img));
+      // Append COMPRESSED files for AI intake to save bandwidth and speed up response.
+      // Storage uploads remain original quality via uploadImages().
+      const compressed: File[] = [];
+      for (const img of images) {
+        try {
+          const c = await compressImageFile(img);
+          compressed.push(c);
+        } catch (e) {
+          // On any compression error, fall back to the original file.
+          console.warn('Image compression failed; using original', e);
+          compressed.push(img);
+        }
+      }
+      compressed.forEach((img) => fd.append('images', img));
       const res = await fetch('/api/ai/intake', {
         method: 'POST',
         body: fd,
