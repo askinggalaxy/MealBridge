@@ -446,320 +446,340 @@ export function CreateDonationForm() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Create Food Donation</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {/* Image Upload moved to top so the user starts with photos and AI can prefill fields */}
-          <div>
-            <Label className="text-sm font-medium mb-3 block">Photos (up to 3)</Label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {images.map((image, index) => (
-                <div key={index} className="relative">
-                  <img
-                    src={URL.createObjectURL(image)}
-                    alt={`Upload ${index + 1}`}
-                    className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              {images.length < 3 && (
-                <>
-                  {/* Gallery upload from device storage */}
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                    <span className="text-sm text-gray-500">Upload Photo</span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      multiple
-                    />
-                  </label>
-
-                  {/* Camera capture: opens the device camera on supported browsers (esp. mobile). */}
-                  {/* We use capture="environment" to prefer the rear camera. Some browsers may ignore it. */}
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                    <Camera className="w-8 h-8 text-gray-400 mb-2" />
-                    <span className="text-sm text-gray-500">Take Photo</span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleImageChange}
-                    />
-                  </label>
-                </>
-              )}
-            </div>
-            {/* AI analyze controls at the top, to encourage early prefill */}
-            <div className="mt-3 flex items-center gap-3">
-              <Button type="button" variant="secondary" onClick={analyzeWithAI} disabled={aiLoading || images.length === 0}>
-                {aiLoading ? 'Analyzing…' : 'Analyze with AI'}
-              </Button>
-              {aiError && <span className="text-sm text-red-600">{aiError}</span>}
-            </div>
-            {aiResult && (
-              <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-                <div className="font-medium mb-1">AI suggestions</div>
-                <div><span className="font-semibold">Title:</span> {aiResult.title}</div>
-                {typeof (aiResult as any).description === 'string' && (
-                  <div className="mt-1"><span className="font-semibold">Description:</span> {(aiResult as any).description}</div>
-                )}
-                <div className="flex flex-wrap gap-4 mt-1">
-                  <div><span className="font-semibold">Category:</span> {aiResult.category}</div>
-                  <div><span className="font-semibold">Condition:</span> {normalizeCondition(aiResult.condition)}</div>
-                  <div><span className="font-semibold">Storage:</span> {aiResult.storage}</div>
-                  <div><span className="font-semibold">Expiry:</span> {aiResult.expiry_date ?? 'unknown'}</div>
-                </div>
-                {Array.isArray(aiResult.allergens) && aiResult.allergens.length > 0 && (
-                  <div className="mt-1"><span className="font-semibold">Allergens:</span> {aiResult.allergens.join(', ')}</div>
-                )}
-                {Array.isArray(aiResult.notes) && aiResult.notes.length > 0 && (
-                  <ul className="mt-1 list-disc list-inside">
-                    {aiResult.notes.map((n, i) => (
-                      <li key={i}>{n}</li>
-                    ))}
-                  </ul>
-                )}
-                <div className="mt-1 text-xs text-gray-500">
-                  Confidence → overall: {Math.round(aiResult.confidence.overall * 100)}%, expiry: {Math.round(aiResult.confidence.expiry * 100)}%, category: {Math.round(aiResult.confidence.category * 100)}%
-                </div>
-              </div>
-            )}
+    <>
+      {/* Global, full-page overlay while AI is analyzing images. */}
+      {/* This makes the operation highly visible, especially on mobile, and prevents accidental interactions. */}
+      {aiLoading && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          aria-live="polite"
+          aria-busy="true"
+          role="status"
+        >
+          <div className="flex flex-col items-center gap-3 rounded-xl bg-white p-6 shadow-xl">
+            {/* Simple CSS spinner (no external deps) */}
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+            <div className="text-sm font-medium text-gray-800">Analyzing photos…</div>
+            <div className="text-xs text-gray-500">This helps pre-fill your form with AI suggestions.</div>
           </div>
-          {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-2">
-              <Label htmlFor="title">Food Title *</Label>
-              <Input
-                id="title"
-                {...form.register('title')}
-                placeholder="e.g., Fresh vegetables from garden"
-              />
-              {form.formState.errors.title && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.title.message}
-                </p>
-              )}
-            </div>
+        </div>
+      )}
 
-            <div className="md:col-span-2">
-              <Label htmlFor="description">Description *</Label>
-              <Textarea
-                id="description"
-                {...form.register('description')}
-                placeholder="Describe the food items, any preparation details, or special instructions..."
-                rows={3}
-              />
-              {form.formState.errors.description && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.description.message}
-                </p>
-              )}
-            </div>
-
+      <Card>
+        <CardHeader>
+          <CardTitle>Create Food Donation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Image Upload moved to top so the user starts with photos and AI can prefill fields */}
             <div>
-              <Label htmlFor="category">Category *</Label>
-              <Select value={form.watch('category_id') || undefined} onValueChange={(value) => form.setValue('category_id', value, { shouldDirty: true, shouldValidate: true })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.icon} {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {form.formState.errors.category_id && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.category_id.message}
-                </p>
+              <Label className="text-sm font-medium mb-3 block">Photos (up to 3)</Label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {images.map((image, index) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={URL.createObjectURL(image)}
+                      alt={`Upload ${index + 1}`}
+                      className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {images.length < 3 && (
+                  <>
+                    {/* Gallery upload from device storage */}
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500">Upload Photo</span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        multiple
+                      />
+                    </label>
+
+                    {/* Camera capture: opens the device camera on supported browsers (esp. mobile). */}
+                    {/* We use capture="environment" to prefer the rear camera. Some browsers may ignore it. */}
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                      <Camera className="w-8 h-8 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500">Take Photo</span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleImageChange}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+              {/* AI analyze controls at the top, to encourage early prefill */}
+              <div className="mt-3 flex items-center gap-3">
+                <Button type="button" variant="secondary" onClick={analyzeWithAI} disabled={aiLoading || images.length === 0}>
+                  {aiLoading ? 'Analyzing…' : 'Analyze with AI'}
+                </Button>
+                {aiError && <span className="text-sm text-red-600">{aiError}</span>}
+              </div>
+              {aiResult && (
+                <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                  <div className="font-medium mb-1">AI suggestions</div>
+                  <div><span className="font-semibold">Title:</span> {aiResult.title}</div>
+                  {typeof (aiResult as any).description === 'string' && (
+                    <div className="mt-1"><span className="font-semibold">Description:</span> {(aiResult as any).description}</div>
+                  )}
+                  <div className="flex flex-wrap gap-4 mt-1">
+                    <div><span className="font-semibold">Category:</span> {aiResult.category}</div>
+                    <div><span className="font-semibold">Condition:</span> {normalizeCondition(aiResult.condition)}</div>
+                    <div><span className="font-semibold">Storage:</span> {aiResult.storage}</div>
+                    <div><span className="font-semibold">Expiry:</span> {aiResult.expiry_date ?? 'unknown'}</div>
+                  </div>
+                  {Array.isArray(aiResult.allergens) && aiResult.allergens.length > 0 && (
+                    <div className="mt-1"><span className="font-semibold">Allergens:</span> {aiResult.allergens.join(', ')}</div>
+                  )}
+                  {Array.isArray(aiResult.notes) && aiResult.notes.length > 0 && (
+                    <ul className="mt-1 list-disc list-inside">
+                      {aiResult.notes.map((n, i) => (
+                        <li key={i}>{n}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-1 text-xs text-gray-500">
+                    Confidence → overall: {Math.round(aiResult.confidence.overall * 100)}%, expiry: {Math.round(aiResult.confidence.expiry * 100)}%, category: {Math.round(aiResult.confidence.category * 100)}%
+                  </div>
+                </div>
               )}
             </div>
-
-            <div>
-              <Label htmlFor="quantity">Quantity *</Label>
-              <Input
-                id="quantity"
-                {...form.register('quantity')}
-                placeholder="e.g., 2 bags, 1 loaf, serves 4"
-              />
-              {form.formState.errors.quantity && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.quantity.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="expiry_date">Expiry Date *</Label>
-              <Input
-                id="expiry_date"
-                type="date"
-                {...form.register('expiry_date')}
-                min={new Date().toISOString().split('T')[0]}
-              />
-              {form.formState.errors.expiry_date && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.expiry_date.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="condition">Item Condition *</Label>
-              <Select value={form.watch('condition')} onValueChange={(value: 'sealed' | 'open') => form.setValue('condition', value, { shouldDirty: true, shouldValidate: true })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sealed">Sealed/Unopened</SelectItem>
-                  <SelectItem value="open">Opened/Prepared</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="storage_type">Storage Type *</Label>
-              <Select value={form.watch('storage_type')} onValueChange={(value: 'ambient' | 'refrigerated' | 'frozen') => form.setValue('storage_type', value, { shouldDirty: true, shouldValidate: true })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ambient">🌡️ Room Temperature</SelectItem>
-                  <SelectItem value="refrigerated">❄️ Refrigerated</SelectItem>
-                  <SelectItem value="frozen">🧊 Frozen</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="pickup_window_start">Pickup Start *</Label>
-              <Input
-                id="pickup_window_start"
-                type="datetime-local"
-                {...form.register('pickup_window_start')}
-                min={new Date().toISOString().slice(0, 16)}
-              />
-              {form.formState.errors.pickup_window_start && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.pickup_window_start.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="pickup_window_end">Pickup End *</Label>
-              <Input
-                id="pickup_window_end"
-                type="datetime-local"
-                {...form.register('pickup_window_end')}
-                min={new Date().toISOString().slice(0, 16)}
-              />
-              {form.formState.errors.pickup_window_end && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.pickup_window_end.message}
-                </p>
-              )}
-            </div>
-
-            <div className="md:col-span-2">
-              <Label htmlFor="address_text">Pickup Address *</Label>
-              <Input
-                id="address_text"
-                // We keep human-readable address, but coordinates are authoritative for distance.
-                {...form.register('address_text')}
-                placeholder="Enter the pickup address"
-              />
-              {form.formState.errors.address_text && (
-                <p className="text-sm text-red-600 mt-1">
-                  {form.formState.errors.address_text.message}
-                </p>
-              )}
-              {/*
-                Map Location Picker: allows precise selection by dragging a marker.
-                - It initializes from the current lat/lng if available, or geocodes the typed address.
-                - It updates hidden numeric fields 'location_lat' and 'location_lng' in the form.
-              */}
-              <div className="mt-4">
-                <LocationPicker
-                  value={useMemo<LatLng | null>(() => {
-                    const lat = form.getValues('location_lat');
-                    const lng = form.getValues('location_lng');
-                    return typeof lat === 'number' && typeof lng === 'number' && !Number.isNaN(lat) && !Number.isNaN(lng)
-                      ? { lat, lng }
-                      : null;
-                  }, [form.watch('location_lat'), form.watch('location_lng')])}
-                  onChange={(coord) => {
-                    // Persist numeric coordinates into the form state with validation
-                    form.setValue('location_lat', coord.lat, { shouldDirty: true, shouldValidate: true });
-                    form.setValue('location_lng', coord.lng, { shouldDirty: true, shouldValidate: true });
-                  }}
-                  addressText={form.watch('address_text')}
-                  onGeocodeError={(msg) => toast.warning(msg)}
-                  className="mt-2"
+            {/* Basic Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2">
+                <Label htmlFor="title">Food Title *</Label>
+                <Input
+                  id="title"
+                  {...form.register('title')}
+                  placeholder="e.g., Fresh vegetables from garden"
                 />
-
-                {/* Hidden inputs registered as numbers to satisfy schema and RHF */}
-                <input type="hidden" {...form.register('location_lat', { valueAsNumber: true })} />
-                <input type="hidden" {...form.register('location_lng', { valueAsNumber: true })} />
-
-                {(form.formState.errors as any).location_lat && (
+                {form.formState.errors.title && (
                   <p className="text-sm text-red-600 mt-1">
-                    {(form.formState.errors as any).location_lat.message as string}
-                  </p>
-                )}
-                {(form.formState.errors as any).location_lng && (
-                  <p className="text-sm text-red-600 mt-1">
-                    {(form.formState.errors as any).location_lng.message as string}
+                    {form.formState.errors.title.message}
                   </p>
                 )}
               </div>
+
+              <div className="md:col-span-2">
+                <Label htmlFor="description">Description *</Label>
+                <Textarea
+                  id="description"
+                  {...form.register('description')}
+                  placeholder="Describe the food items, any preparation details, or special instructions..."
+                  rows={3}
+                />
+                {form.formState.errors.description && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {form.formState.errors.description.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="category">Category *</Label>
+                <Select value={form.watch('category_id') || undefined} onValueChange={(value) => form.setValue('category_id', value, { shouldDirty: true, shouldValidate: true })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.icon} {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.formState.errors.category_id && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {form.formState.errors.category_id.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="quantity">Quantity *</Label>
+                <Input
+                  id="quantity"
+                  {...form.register('quantity')}
+                  placeholder="e.g., 2 bags, 1 loaf, serves 4"
+                />
+                {form.formState.errors.quantity && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {form.formState.errors.quantity.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="expiry_date">Expiry Date *</Label>
+                <Input
+                  id="expiry_date"
+                  type="date"
+                  {...form.register('expiry_date')}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+                {form.formState.errors.expiry_date && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {form.formState.errors.expiry_date.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="condition">Item Condition *</Label>
+                <Select value={form.watch('condition')} onValueChange={(value: 'sealed' | 'open') => form.setValue('condition', value, { shouldDirty: true, shouldValidate: true })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sealed">Sealed/Unopened</SelectItem>
+                    <SelectItem value="open">Opened/Prepared</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="storage_type">Storage Type *</Label>
+                <Select value={form.watch('storage_type')} onValueChange={(value: 'ambient' | 'refrigerated' | 'frozen') => form.setValue('storage_type', value, { shouldDirty: true, shouldValidate: true })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ambient">🌡️ Room Temperature</SelectItem>
+                    <SelectItem value="refrigerated">❄️ Refrigerated</SelectItem>
+                    <SelectItem value="frozen">🧊 Frozen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="pickup_window_start">Pickup Start *</Label>
+                <Input
+                  id="pickup_window_start"
+                  type="datetime-local"
+                  {...form.register('pickup_window_start')}
+                  min={new Date().toISOString().slice(0, 16)}
+                />
+                {form.formState.errors.pickup_window_start && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {form.formState.errors.pickup_window_start.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="pickup_window_end">Pickup End *</Label>
+                <Input
+                  id="pickup_window_end"
+                  type="datetime-local"
+                  {...form.register('pickup_window_end')}
+                  min={new Date().toISOString().slice(0, 16)}
+                />
+                {form.formState.errors.pickup_window_end && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {form.formState.errors.pickup_window_end.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <Label htmlFor="address_text">Pickup Address *</Label>
+                <Input
+                  id="address_text"
+                  // We keep human-readable address, but coordinates are authoritative for distance.
+                  {...form.register('address_text')}
+                  placeholder="Enter the pickup address"
+                />
+                {form.formState.errors.address_text && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {form.formState.errors.address_text.message}
+                  </p>
+                )}
+                {/*
+                  Map Location Picker: allows precise selection by dragging a marker.
+                  - It initializes from the current lat/lng if available, or geocodes the typed address.
+                  - It updates hidden numeric fields 'location_lat' and 'location_lng' in the form.
+                */}
+                <div className="mt-4">
+                  <LocationPicker
+                    value={useMemo<LatLng | null>(() => {
+                      const lat = form.getValues('location_lat');
+                      const lng = form.getValues('location_lng');
+                      return typeof lat === 'number' && typeof lng === 'number' && !Number.isNaN(lat) && !Number.isNaN(lng)
+                        ? { lat, lng }
+                        : null;
+                    }, [form.watch('location_lat'), form.watch('location_lng')])}
+                    onChange={(coord) => {
+                      // Persist numeric coordinates into the form state with validation
+                      form.setValue('location_lat', coord.lat, { shouldDirty: true, shouldValidate: true });
+                      form.setValue('location_lng', coord.lng, { shouldDirty: true, shouldValidate: true });
+                    }}
+                    addressText={form.watch('address_text')}
+                    onGeocodeError={(msg) => toast.warning(msg)}
+                    className="mt-2"
+                  />
+
+                  {/* Hidden inputs registered as numbers to satisfy schema and RHF */}
+                  <input type="hidden" {...form.register('location_lat', { valueAsNumber: true })} />
+                  <input type="hidden" {...form.register('location_lng', { valueAsNumber: true })} />
+
+                  {(form.formState.errors as any).location_lat && (
+                    <p className="text-sm text-red-600 mt-1">
+                      {(form.formState.errors as any).location_lat.message as string}
+                    </p>
+                  )}
+                  {(form.formState.errors as any).location_lng && (
+                    <p className="text-sm text-red-600 mt-1">
+                      {(form.formState.errors as any).location_lng.message as string}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Terms */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="terms"
-              onCheckedChange={(checked) => form.setValue('terms_accepted', checked as boolean)}
-            />
-            <Label htmlFor="terms" className="text-sm">
-              I confirm this food is safe to share and I've read the{' '}
-              <a href="/guidelines" className="text-green-600 hover:text-green-700 underline">
-                sharing guidelines
-              </a>
-            </Label>
-          </div>
-          {form.formState.errors.terms_accepted && (
-            <p className="text-sm text-red-600">
-              {form.formState.errors.terms_accepted.message}
-            </p>
-          )}
+            {/* Terms */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="terms"
+                onCheckedChange={(checked) => form.setValue('terms_accepted', checked as boolean)}
+              />
+              <Label htmlFor="terms" className="text-sm">
+                I confirm this food is safe to share and I've read the{' '}
+                <a href="/guidelines" className="text-green-600 hover:text-green-700 underline">
+                  sharing guidelines
+                </a>
+              </Label>
+            </div>
+            {form.formState.errors.terms_accepted && (
+              <p className="text-sm text-red-600">
+                {form.formState.errors.terms_accepted.message}
+              </p>
+            )}
 
-          <Button 
-            type="submit" 
-            className="w-full bg-green-600 hover:bg-green-700" 
-            disabled={loading || uploading}
-          >
-            {loading ? 'Creating...' : 'Share Food'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+            <Button 
+              type="submit" 
+              className="w-full bg-green-600 hover:bg-green-700" 
+              disabled={loading || uploading}
+            >
+              {loading ? 'Creating...' : 'Share Food'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </>
   );
 }
