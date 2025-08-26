@@ -309,9 +309,12 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
   };
 
   const setDonationHidden = async (donationId: string, hidden: boolean) => {
-    const { error } = await supabase.from('donations').update({ is_hidden: hidden }).eq('id', donationId);
+    const { error } = await supabase
+      .from('donations')
+      .update({ is_hidden: hidden, updated_at: new Date().toISOString() })
+      .eq('id', donationId);
     if (error) {
-      toast.error('Failed to update visibility');
+      toast.error(`Failed to update visibility: ${error.message}`);
     } else {
       toast.success(hidden ? 'Donation hidden' : 'Donation unhidden');
       loadDonations();
@@ -335,27 +338,36 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
       console.warn('Failed to remove some images from storage', e);
     }
 
-    const { error } = await supabase.from('donations').delete().eq('id', d.id);
+    const { error, data, status } = await supabase
+      .from('donations')
+      .delete()
+      .eq('id', d.id)
+      .select('id'); // request representation to know if anything was deleted
     if (error) {
-      toast.error('Failed to delete donation');
-    } else {
-      toast.success('Donation deleted');
-      loadDonations();
-      // Close detail modal if it was open for this donation
-      if (detailDonation && detailDonation.id === d.id) {
-        setDetailDonation(null);
-      }
+      toast.error(`Failed to delete donation: ${error.message}`);
+      return;
+    }
+    const deletedCount = Array.isArray(data) ? data.length : 0;
+    if (deletedCount < 1) {
+      toast.error('Delete blocked by permissions or donation not found');
+      return;
+    }
+    toast.success('Donation deleted');
+    loadDonations();
+    // Close detail modal if it was open for this donation
+    if (detailDonation && detailDonation.id === d.id) {
+      setDetailDonation(null);
     }
   };
 
   const hideDonation = async (donationId: string) => {
     const { error } = await supabase
       .from('donations')
-      .update({ is_hidden: true })
+      .update({ is_hidden: true, updated_at: new Date().toISOString() })
       .eq('id', donationId);
 
     if (error) {
-      toast.error('Failed to hide donation');
+      toast.error(`Failed to hide donation: ${error.message}`);
     } else {
       toast.success('Donation hidden');
       loadData();
