@@ -9,6 +9,7 @@ import { Calendar, Clock, MapPin, Star, User } from 'lucide-react';
 import { Database } from '@/lib/supabase/database.types';
 import { formatDistanceToNow, format } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ReportDialog } from './report-dialog';
 
 type Donation = Database['public']['Tables']['donations']['Row'] & {
   profiles: Database['public']['Tables']['profiles']['Row'];
@@ -21,6 +22,7 @@ interface DonationCardProps {
 
 export function DonationCard({ donation }: DonationCardProps) {
   const [imageError, setImageError] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   const getExpiryColor = (expiryDate: string) => {
     const days = Math.ceil((new Date(expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
@@ -152,17 +154,24 @@ export function DonationCard({ donation }: DonationCardProps) {
         </div>
       </CardContent>
 
-      <CardFooter className="pt-3">
-        {donation.status === 'available' ? (
-          <Link href={`/donations/${donation.id}`} className="w-full">
-            <Button className="w-full bg-green-600 hover:bg-green-700">
-              View Details & Reserve
+      <CardFooter className="pt-3 flex items-center gap-2">
+        <div className="flex-1">
+          {donation.status === 'available' ? (
+            <Link href={`/donations/${donation.id}`} className="w-full block">
+              <Button className="w-full bg-green-600 hover:bg-green-700">
+                View Details & Reserve
+              </Button>
+            </Link>
+          ) : (
+            <Button className="w-full" variant="outline" disabled>
+              {donation.status === 'reserved' ? 'Reserved - Delivery in progress' : 'Donated'}
             </Button>
-          </Link>
-        ) : (
-          <Button className="w-full" variant="outline" disabled>
-            {donation.status === 'reserved' ? 'Reserved - Delivery in progress' : 'Donated'}
-          </Button>
+          )}
+        </div>
+        {/* Lightweight Report entry point. Auth is enforced in ReportDialog */}
+        <Button variant="outline" size="sm" onClick={() => setShowReport(true)}>Report</Button>
+        {showReport && (
+          <ReportDialog donationId={donation.id} onClose={() => setShowReport(false)} />
         )}
       </CardFooter>
     </Card>

@@ -98,6 +98,49 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
     setLoading(false);
   };
 
+  // --- Flag actions helpers (for donation targets) ---
+  // Fetch a donation row by id for admin actions (delete/ban/view)
+  const getDonationById = async (donationId: string) => {
+    const { data, error } = await supabase
+      .from('donations')
+      .select('*')
+      .eq('id', donationId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data;
+  };
+
+  // Delete donation by id (loads full row first to reuse existing delete flow incl. storage cleanup)
+  const deleteFlaggedDonation = async (donationId: string) => {
+    const row = await getDonationById(donationId);
+    if (!row) {
+      toast.error('Donation not found');
+      return;
+    }
+    await deleteDonation(row);
+    // Refresh flags stats after deletion
+    loadData();
+  };
+
+  // Ban the donor owner of a donation
+  const banDonorForDonation = async (donationId: string) => {
+    const row = await getDonationById(donationId);
+    if (!row) {
+      toast.error('Donation not found');
+      return;
+    }
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_banned: true })
+      .eq('id', row.donor_id);
+    if (error) {
+      toast.error('Failed to ban donor');
+      return;
+    }
+    toast.success('Donor banned');
+    loadUsers();
+  };
+
   const handleFlag = async (flagId: string, action: 'reviewed' | 'resolved') => {
     const { error } = await supabase
       .from('flags')
@@ -342,44 +385,29 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
                   ))}
                 </div>
               ) : flags.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No flags to review</p>
+                <p className="text-gray-500">No flags found</p>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {flags.map((flag) => (
                     <div key={flag.id} className="p-4 border rounded-lg">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge
-                              variant={flag.status === 'pending' ? 'destructive' : 'secondary'}
-                            >
+                          <div className="flex items-center gap-2">
+                            <Badge variant={flag.status === 'pending' ? 'destructive' : 'secondary'}>
                               {flag.status}
                             </Badge>
-                            <Badge variant="outline">
-                              {flag.target_type}
-                            </Badge>
-                            <Badge variant="outline">
-                              {flag.reason}
-                            </Badge>
+                            <span className="text-xs text-gray-500">{new Date(flag.created_at).toLocaleString()}</span>
                           </div>
-                          
-                          <p className="text-sm text-gray-700 mb-2">
-                            <strong>Reported by:</strong> {flag.reporter.display_name}
-                          </p>
-                          
+                          <div className="mt-1 text-sm">
+                            <span className="font-medium">{flag.reason}</span> • Reported by {flag.reporter?.display_name || 'user'}
+                          </div>
                           {flag.description && (
-                            <p className="text-sm text-gray-600 mb-3">
-                              <strong>Description:</strong> {flag.description}
-                            </p>
+                            <div className="text-sm text-gray-700 mt-1">{flag.description}</div>
                           )}
-                          
-                          <p className="text-xs text-gray-500">
-                            Reported {new Date(flag.created_at).toLocaleString()}
-                          </p>
-                        </div>
-                        
-                        {flag.status === 'pending' && (
-                          <div className="flex gap-2">
+                          <div className="text-xs text-gray-500 mt-1">
+                            Target: {flag.target_type} • ID: {flag.target_id}
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-2">
                             <Button
                               size="sm"
                               variant="outline"
@@ -394,16 +422,43 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
                               Resolve
                             </Button>
                             {flag.target_type === 'donation' && (
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => hideDonation(flag.target_id)}
-                              >
-                                Hide Item
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    const row = await getDonationById(flag.target_id);
+                                    if (row) setDetailDonation(row);
+                                    else toast.error('Donation not found');
+                                  }}
+                                >
+                                  View
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => deleteFlaggedDonation(flag.target_id)}
+                                >
+                                  Delete donation
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => banDonorForDonation(flag.target_id)}
+                                >
+                                  Ban donor
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => hideDonation(flag.target_id)}
+                                >
+                                  Hide donation
+                                </Button>
+                              </>
                             )}
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
                   ))}

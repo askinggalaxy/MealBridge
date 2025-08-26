@@ -15,6 +15,7 @@ import { ReservationDialog } from './reservation-dialog';
 import { ChatDialog } from './chat-dialog';
 import { ReviewButton } from '@/components/reviews/review-button';
 import { formatDistanceToNow, format } from 'date-fns';
+import { ReportDialog } from './report-dialog';
 
 type Donation = Database['public']['Tables']['donations']['Row'] & {
   profiles: Database['public']['Tables']['profiles']['Row'];
@@ -31,6 +32,8 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
   const [loading, setLoading] = useState(false);
   const [showReservationDialog, setShowReservationDialog] = useState(false);
   const [showChatDialog, setShowChatDialog] = useState(false);
+  // Local state to control the Report dialog visibility for this donation detail view.
+  const [showReportDialog, setShowReportDialog] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -303,6 +306,15 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
                     View Messages
                   </Button>
                 )}
+
+                {/* Report button: available to any viewer; actual auth & insert handled in dialog */}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowReportDialog(true)}
+                >
+                  Report this donation
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -340,6 +352,13 @@ export function DonationDetails({ donation }: DonationDetailsProps) {
         <ChatDialog
           donation={donation}
           onClose={() => setShowChatDialog(false)}
+        />
+      )}
+
+      {showReportDialog && (
+        <ReportDialog
+          donationId={donation.id}
+          onClose={() => setShowReportDialog(false)}
         />
       )}
     </div>
