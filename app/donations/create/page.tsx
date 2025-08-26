@@ -1,11 +1,13 @@
 import { requireAuth } from '@/lib/auth';
 import { CreateDonationForm } from '@/components/donations/create-donation-form';
+import { Header } from '@/components/layout/header';
 
 export default async function CreateDonationPage() {
   await requireAuth();
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Header />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-8">

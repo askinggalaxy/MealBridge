@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { createClient } from '@/utils/supabase/client';
 import { toast } from 'sonner';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, Camera } from 'lucide-react';
 import { Database } from '@/lib/supabase/database.types';
 import LocationPicker, { LatLng } from '@/components/donations/location-picker';
 
@@ -473,17 +473,34 @@ export function CreateDonationForm() {
                 </div>
               ))}
               {images.length < 3 && (
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-500">Upload Photo</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    multiple
-                  />
-                </label>
+                <>
+                  {/* Gallery upload from device storage */}
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-500">Upload Photo</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      multiple
+                    />
+                  </label>
+
+                  {/* Camera capture: opens the device camera on supported browsers (esp. mobile). */}
+                  {/* We use capture="environment" to prefer the rear camera. Some browsers may ignore it. */}
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                    <Camera className="w-8 h-8 text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-500">Take Photo</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageChange}
+                    />
+                  </label>
+                </>
               )}
             </div>
             {/* AI analyze controls at the top, to encourage early prefill */}
