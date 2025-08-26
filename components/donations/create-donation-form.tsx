@@ -53,6 +53,19 @@ export function CreateDonationForm() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  // AI-related local UI state. We keep results to let users review what the AI inferred.
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiResult, setAiResult] = useState<{
+    title: string;
+    category: 'bread' | 'dairy' | 'produce' | 'canned' | 'beverages' | 'desserts' | 'other';
+    condition: 'sealed' | 'opened';
+    storage: 'ambient' | 'refrigerated' | 'frozen';
+    expiry_date: string | null;
+    allergens: string[];
+    notes: string[];
+    confidence: { overall: number; expiry: number; category: number };
+  } | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -130,6 +143,20 @@ export function CreateDonationForm() {
   useEffect(() => {
     loadCategories();
   }, []);
+
+  // Auto-run AI once when images are added to speed up prefill.
+  // We avoid re-running for subsequent minor changes by tracking last analyzed count.
+  const lastAnalyzedRef = useRef<number>(0);
+  useEffect(() => {
+    if (images.length > 0 && images.length !== lastAnalyzedRef.current && !aiLoading) {
+      lastAnalyzedRef.current = images.length;
+      // Small defer to allow state/UI to settle before calling the API
+      const t = setTimeout(() => {
+        analyzeWithAI();
+      }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [images, aiLoading]);
 
   const loadCategories = async () => {
     const { data, error } = await supabase
@@ -278,6 +305,146 @@ export function CreateDonationForm() {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Normalize AI enums to this app's form schema:
+  // - AI returns condition "opened" while our schema expects "open".
+  const normalizeCondition = (c: string): 'sealed' | 'open' => (c === 'opened' ? 'open' : 'sealed');
+
+  // Map AI category label to an existing category_id from the categories table.
+  // We try exact match by normalized name; if not found, try contains; otherwise fallback to first matching known synonym or leave unchanged.
+  const mapAiCategoryToCategoryId = (
+    aiCat: 'bread' | 'dairy' | 'produce' | 'canned' | 'beverages' | 'desserts' | 'other',
+    cats: Category[]
+  ): string | null => {
+    const norm = aiCat.toLowerCase();
+    // Common mappings for display names that might exist in DB (e.g., "Beverages", "Canned Goods").
+    const synonyms: Record<string, string[]> = {
+      bread: ['bread', 'bakery', 'baked'],
+      dairy: ['dairy', 'milk', 'cheese', 'yogurt'],
+      produce: ['produce', 'fruits', 'vegetables', 'veggies'],
+      canned: ['canned', 'tinned', 'canned goods'],
+      beverages: ['beverages', 'drinks', 'juice', 'soda', 'water'],
+      desserts: ['desserts', 'sweets', 'pastry', 'cakes'],
+      other: ['other', 'misc', 'various'],
+    };
+    const names = cats.map(c => ({ id: c.id, name: (c.name || '').toLowerCase() }));
+    // 1) exact name equals AI label
+    const exact = names.find(n => n.name === norm);
+    if (exact) return exact.id;
+    // 2) includes-based
+    for (const n of names) {
+      if (n.name.includes(norm)) return n.id;
+    }
+    // 3) synonyms
+    const syn = synonyms[norm] || [];
+    for (const n of names) {
+      if (syn.some(s => n.name.includes(s))) return n.id;
+    }
+    return null;
+  };
+
+  // Call our real Next.js API to analyze the selected images with OpenAI Vision.
+  const analyzeWithAI = async () => {
+    try {
+      setAiError(null);
+      setAiResult(null);
+      if (images.length === 0) {
+        toast.error('Add at least one photo first');
+        return;
+      }
+      setAiLoading(true);
+      const fd = new FormData();
+      // Append raw files; API will convert and send to OpenAI. We avoid uploading to storage at this stage.
+      images.forEach(img => fd.append('images', img));
+      const res = await fetch('/api/ai/intake', {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        const msg = (err && (err.error || err.message)) || 'AI analysis failed';
+        setAiError(msg);
+        toast.error(msg);
+        return;
+      }
+      const data = await res.json();
+      // Minimal client validation of the response. We keep it permissive but safe.
+      if (!data || typeof data !== 'object') throw new Error('Invalid AI response');
+      setAiResult(data);
+
+      // Apply prefill cautiously: never overwrite fields the user already modified.
+      const current = form.getValues();
+      const dirty = form.formState.dirtyFields as Record<string, boolean>;
+
+      // Title
+      if (!dirty.title && (!current.title || current.title.trim().length < 3)) {
+        if (typeof data.title === 'string' && data.title.trim()) {
+          form.setValue('title', data.title.trim(), { shouldDirty: true, shouldValidate: true });
+        }
+      }
+
+      // Description (ask AI to provide a short neutral text). Prefill if not dirty and too short/empty.
+      if (!dirty.description) {
+        const desc = (data as any).description;
+        if (typeof desc === 'string') {
+          const trimmed = desc.trim();
+          if (!current.description || current.description.trim().length < 10) {
+            if (trimmed.length >= 10) {
+              form.setValue('description', trimmed, { shouldDirty: true, shouldValidate: true });
+            }
+          }
+        }
+      }
+
+      // Category -> category_id mapping
+      if (!dirty.category_id && !current.category_id) {
+        const mapped = mapAiCategoryToCategoryId(data.category, categories);
+        if (mapped) {
+          form.setValue('category_id', mapped, { shouldDirty: true, shouldValidate: true });
+        }
+      }
+
+      // Condition (opened->open). Overwrite only if user hasn't touched the field.
+      if (!dirty.condition) {
+        const normCond = normalizeCondition(data.condition);
+        if (normCond === 'open' || normCond === 'sealed') {
+          form.setValue('condition', normCond, { shouldDirty: true, shouldValidate: true });
+        }
+      }
+
+      // Storage type
+      if (!dirty.storage_type) {
+        // data.storage is already one of ambient|refrigerated|frozen
+        form.setValue('storage_type', data.storage, { shouldDirty: true, shouldValidate: true });
+      }
+
+      // Expiry date; only set if valid YYYY-MM-DD
+      if (!dirty.expiry_date && !current.expiry_date && typeof data.expiry_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.expiry_date)) {
+        form.setValue('expiry_date', data.expiry_date, { shouldDirty: true, shouldValidate: true });
+      }
+
+      // Show warnings/notes from AI to guide the user.
+      if (Array.isArray(data.notes) && data.notes.length > 0) {
+        for (const n of data.notes) {
+          // Distinguish flags vs retake suggestion.
+          if (typeof n === 'string' && n.toUpperCase().startsWith('FLAG:')) {
+            toast.warning(n);
+          } else {
+            toast.message(n);
+          }
+        }
+      }
+
+      toast.success('AI analysis complete. Prefilled available fields.');
+    } catch (e: any) {
+      console.error('AI analyze error:', e);
+      const msg = e?.message || 'AI analysis failed';
+      setAiError(msg);
+      toast.error(msg);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -285,6 +452,76 @@ export function CreateDonationForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          {/* Image Upload moved to top so the user starts with photos and AI can prefill fields */}
+          <div>
+            <Label className="text-sm font-medium mb-3 block">Photos (up to 3)</Label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {images.map((image, index) => (
+                <div key={index} className="relative">
+                  <img
+                    src={URL.createObjectURL(image)}
+                    alt={`Upload ${index + 1}`}
+                    className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {images.length < 3 && (
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                  <span className="text-sm text-gray-500">Upload Photo</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    multiple
+                  />
+                </label>
+              )}
+            </div>
+            {/* AI analyze controls at the top, to encourage early prefill */}
+            <div className="mt-3 flex items-center gap-3">
+              <Button type="button" variant="secondary" onClick={analyzeWithAI} disabled={aiLoading || images.length === 0}>
+                {aiLoading ? 'Analyzing…' : 'Analyze with AI'}
+              </Button>
+              {aiError && <span className="text-sm text-red-600">{aiError}</span>}
+            </div>
+            {aiResult && (
+              <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                <div className="font-medium mb-1">AI suggestions</div>
+                <div><span className="font-semibold">Title:</span> {aiResult.title}</div>
+                {typeof (aiResult as any).description === 'string' && (
+                  <div className="mt-1"><span className="font-semibold">Description:</span> {(aiResult as any).description}</div>
+                )}
+                <div className="flex flex-wrap gap-4 mt-1">
+                  <div><span className="font-semibold">Category:</span> {aiResult.category}</div>
+                  <div><span className="font-semibold">Condition:</span> {normalizeCondition(aiResult.condition)}</div>
+                  <div><span className="font-semibold">Storage:</span> {aiResult.storage}</div>
+                  <div><span className="font-semibold">Expiry:</span> {aiResult.expiry_date ?? 'unknown'}</div>
+                </div>
+                {Array.isArray(aiResult.allergens) && aiResult.allergens.length > 0 && (
+                  <div className="mt-1"><span className="font-semibold">Allergens:</span> {aiResult.allergens.join(', ')}</div>
+                )}
+                {Array.isArray(aiResult.notes) && aiResult.notes.length > 0 && (
+                  <ul className="mt-1 list-disc list-inside">
+                    {aiResult.notes.map((n, i) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-1 text-xs text-gray-500">
+                  Confidence → overall: {Math.round(aiResult.confidence.overall * 100)}%, expiry: {Math.round(aiResult.confidence.expiry * 100)}%, category: {Math.round(aiResult.confidence.category * 100)}%
+                </div>
+              </div>
+            )}
+          </div>
           {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
@@ -318,7 +555,7 @@ export function CreateDonationForm() {
 
             <div>
               <Label htmlFor="category">Category *</Label>
-              <Select onValueChange={(value) => form.setValue('category_id', value)}>
+              <Select value={form.watch('category_id') || undefined} onValueChange={(value) => form.setValue('category_id', value, { shouldDirty: true, shouldValidate: true })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -368,7 +605,7 @@ export function CreateDonationForm() {
 
             <div>
               <Label htmlFor="condition">Item Condition *</Label>
-              <Select onValueChange={(value: 'sealed' | 'open') => form.setValue('condition', value)} defaultValue="sealed">
+              <Select value={form.watch('condition')} onValueChange={(value: 'sealed' | 'open') => form.setValue('condition', value, { shouldDirty: true, shouldValidate: true })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -381,7 +618,7 @@ export function CreateDonationForm() {
 
             <div>
               <Label htmlFor="storage_type">Storage Type *</Label>
-              <Select onValueChange={(value: 'ambient' | 'refrigerated' | 'frozen') => form.setValue('storage_type', value)} defaultValue="ambient">
+              <Select value={form.watch('storage_type')} onValueChange={(value: 'ambient' | 'refrigerated' | 'frozen') => form.setValue('storage_type', value, { shouldDirty: true, shouldValidate: true })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -475,43 +712,6 @@ export function CreateDonationForm() {
                   </p>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Image Upload */}
-          <div>
-            <Label className="text-sm font-medium mb-3 block">Photos (up to 3)</Label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {images.map((image, index) => (
-                <div key={index} className="relative">
-                  <img
-                    src={URL.createObjectURL(image)}
-                    alt={`Upload ${index + 1}`}
-                    className="w-full h-32 object-cover rounded-lg border-2 border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              
-              {images.length < 3 && (
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-500">Upload Photo</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    multiple
-                  />
-                </label>
-              )}
             </div>
           </div>
 
