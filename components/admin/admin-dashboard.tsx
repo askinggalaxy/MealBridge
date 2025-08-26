@@ -11,10 +11,11 @@ import { createClient } from '@/utils/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import Link from 'next/link';
+// removed unused Textarea import
 
 type Flag = Database['public']['Tables']['flags']['Row'] & {
-  reporter: Database['public']['Tables']['profiles']['Row'];
+  reporter: Pick<Database['public']['Tables']['profiles']['Row'], 'id' | 'display_name' | 'avatar_url'>;
 };
 
 interface AdminDashboardProps {
@@ -42,6 +43,8 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
   const [editDescription, setEditDescription] = useState('');
   // Detail panel state: which donation to show in a modal with images and quick actions.
   const [detailDonation, setDetailDonation] = useState<Database['public']['Tables']['donations']['Row'] | null>(null);
+  // When a detail donation is open, we also load the donor public profile to show a link
+  const [detailDonor, setDetailDonor] = useState<Pick<Database['public']['Tables']['profiles']['Row'],'id'|'display_name'|'avatar_url'>|null>(null);
   // Pagination + sorting state for donations list.
   const [page, setPage] = useState(1); // 1-based page index for UX.
   const [pageSize, setPageSize] = useState(10);
@@ -72,7 +75,9 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
       .select(`
         *,
         reporter:profiles!flags_reporter_id_fkey (
-          display_name
+          id,
+          display_name,
+          avatar_url
         )
       `)
       .order('created_at', { ascending: false });
@@ -98,16 +103,63 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
     setLoading(false);
   };
 
+  // Load donor profile by id for the detail modal
+  const loadDonorProfile = async (donorId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url')
+      .eq('id', donorId)
+      .maybeSingle();
+    setDetailDonor(data as any);
+  };
+
   // --- Flag actions helpers (for donation targets) ---
   // Fetch a donation row by id for admin actions (delete/ban/view)
+  // We explicitly select fields used in the detail modal and coerce `images` to a string[]
+  // to handle edge cases where the DB might return null or JSON text.
   const getDonationById = async (donationId: string) => {
     const { data, error } = await supabase
       .from('donations')
-      .select('*')
+      .select(
+        [
+          'id',
+          'donor_id',
+          'title',
+          'description',
+          'status',
+          'updated_at',
+          'images',
+          'category_id',
+          'quantity',
+          'expiry_date',
+          'pickup_window_start',
+          'pickup_window_end',
+          'address_text',
+          'location_lat',
+          'location_lng',
+          'is_hidden',
+        ].join(',')
+      )
       .eq('id', donationId)
       .maybeSingle();
     if (error || !data) return null;
-    return data;
+    // Normalize images to a string[]
+    let imgs: string[] = [];
+    const raw = (data as any).images;
+    if (Array.isArray(raw)) {
+      imgs = raw.filter((u) => typeof u === 'string');
+    } else if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) imgs = parsed.filter((u) => typeof u === 'string');
+      } catch {}
+    }
+    const base = data as unknown as Database['public']['Tables']['donations']['Row'];
+    const merged: Database['public']['Tables']['donations']['Row'] = {
+      ...base,
+      images: imgs,
+    };
+    return merged;
   };
 
   // Delete donation by id (loads full row first to reuse existing delete flow incl. storage cleanup)
@@ -399,7 +451,14 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
                             <span className="text-xs text-gray-500">{new Date(flag.created_at).toLocaleString()}</span>
                           </div>
                           <div className="mt-1 text-sm">
-                            <span className="font-medium">{flag.reason}</span> • Reported by {flag.reporter?.display_name || 'user'}
+                            <span className="font-medium">{flag.reason}</span> • Reported by{' '}
+                            {flag.reporter?.id ? (
+                              <Link href={`/users/${flag.reporter.id}`} className="underline hover:no-underline">
+                                {flag.reporter.display_name}
+                              </Link>
+                            ) : (
+                              <span>user</span>
+                            )}
                           </div>
                           {flag.description && (
                             <div className="text-sm text-gray-700 mt-1">{flag.description}</div>
@@ -428,8 +487,12 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
                                   variant="outline"
                                   onClick={async () => {
                                     const row = await getDonationById(flag.target_id);
-                                    if (row) setDetailDonation(row);
-                                    else toast.error('Donation not found');
+                                    if (row) {
+                                      setDetailDonation(row);
+                                      loadDonorProfile(row.donor_id);
+                                    } else {
+                                      toast.error('Donation not found');
+                                    }
                                   }}
                                 >
                                   View
@@ -458,9 +521,9 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
                               </>
                             )}
                           </div>
-                        </div>
                       </div>
                     </div>
+                  </div>
                   ))}
                 </div>
               )}
@@ -471,93 +534,67 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
         {/* Donations management */}
         <TabsContent value="donations" className="space-y-4">
           <Card>
-            <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <CardHeader>
               <CardTitle>Manage Donations</CardTitle>
-              {/* Sorting + pagination controls */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Sort field */}
-                <label className="text-sm text-gray-600">Sort by</label>
-                <select
-                  className="border rounded px-2 py-1 text-sm"
-                  value={sortField}
-                  onChange={(e) => { setSortField(e.target.value as any); setPage(1); }}
-                >
-                  <option value="created_at">Created</option>
-                  <option value="updated_at">Updated</option>
-                  <option value="status">Status</option>
-                  <option value="title">Title</option>
-                </select>
-                <select
-                  className="border rounded px-2 py-1 text-sm"
-                  value={sortDir}
-                  onChange={(e) => { setSortDir(e.target.value as any); setPage(1); }}
-                >
-                  <option value="desc">Desc</option>
-                  <option value="asc">Asc</option>
-                </select>
-                {/* Page size */}
-                <label className="text-sm text-gray-600 ml-2">Page size</label>
-                <select
-                  className="border rounded px-2 py-1 text-sm"
-                  value={pageSize}
-                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <Button size="sm" variant="outline" onClick={loadDonations}>Refresh</Button>
-              </div>
             </CardHeader>
             <CardContent>
+              {/* Sorting controls: choose field + direction. We keep it simple and explicit. */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Sort by</span>
+                  <Button size="sm" variant={sortField === 'created_at' ? 'secondary' : 'outline'} onClick={() => setSortField('created_at')}>created_at</Button>
+                  <Button size="sm" variant={sortField === 'updated_at' ? 'secondary' : 'outline'} onClick={() => setSortField('updated_at')}>updated_at</Button>
+                  <Button size="sm" variant={sortField === 'status' ? 'secondary' : 'outline'} onClick={() => setSortField('status')}>status</Button>
+                  <Button size="sm" variant={sortField === 'title' ? 'secondary' : 'outline'} onClick={() => setSortField('title')}>title</Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Direction</span>
+                  <Button size="sm" variant={sortDir === 'desc' ? 'secondary' : 'outline'} onClick={() => setSortDir('desc')}>desc</Button>
+                  <Button size="sm" variant={sortDir === 'asc' ? 'secondary' : 'outline'} onClick={() => setSortDir('asc')}>asc</Button>
+                </div>
+              </div>
+
+              {/* Donations list. We show minimal info + inline actions. */}
               {donationsLoading ? (
-                <div className="space-y-3">{[...Array(5)].map((_, i) => (<div key={i} className="animate-pulse bg-gray-200 h-14 rounded" />))}</div>
+                <div className="space-y-3">{[...Array(6)].map((_, i) => (<div key={i} className="animate-pulse bg-gray-200 h-12 rounded" />))}</div>
               ) : donations.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No donations found</p>
+                <Alert><AlertDescription>No donations found</AlertDescription></Alert>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {donations.map((d) => (
-                    <div key={d.id} className="p-4 border rounded-lg bg-white">
-                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          {editingDonationId === d.id ? (
-                            <div className="space-y-2">
-                              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" />
-                              <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="Description" rows={3} />
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={() => saveDonationEdits(d.id)}>
-                                  <Save className="h-4 w-4 mr-1" /> Save
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditingDonationId(null)}>
-                                  <XCircle className="h-4 w-4 mr-1" /> Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold truncate">{d.title}</h3>
-                                {d.is_hidden ? (
-                                  <Badge variant="secondary" className="bg-gray-200 text-gray-700"><EyeOff className="h-3 w-3 mr-1" /> hidden</Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-green-700 border-green-300"><Eye className="h-3 w-3 mr-1" /> visible</Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-gray-600 line-clamp-2 mt-1">{d.description}</p>
-                              <div className="text-xs text-gray-500 mt-1">Status: {d.status} • Updated {new Date(d.updated_at).toLocaleString()}</div>
-                            </div>
-                          )}
+                    <div key={d.id} className="p-3 border rounded">
+                      <div className="flex items-start justify-between gap-3">
+                        {/* Left: title + meta */}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium truncate max-w-[40ch]" title={d.title}>{d.title}</span>
+                            <Badge variant="outline">{d.status}</Badge>
+                            {d.is_hidden && <Badge variant="destructive">hidden</Badge>}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Created: {new Date(d.created_at).toLocaleString()} • Updated: {new Date(d.updated_at).toLocaleString()}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Button size="sm" variant="outline" onClick={() => setDetailDonation(d)}>
-                            View
-                          </Button>
-                          {editingDonationId === d.id ? null : (
+                        {/* Right: actions */}
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          {/* View details modal to see images and quick status */}
+                          <Button size="sm" variant="outline" onClick={async () => { setDetailDonation(d); loadDonorProfile(d.donor_id); }}>View</Button>
+                          {editingDonationId === d.id ? (
+                            <>
+                              {/* Save button appears if editing; actual inputs appear below. */}
+                              <Button size="sm" onClick={() => saveDonationEdits(d.id)}>
+                                <Save className="h-4 w-4 mr-1" /> Save
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingDonationId(null)}>
+                                <XCircle className="h-4 w-4 mr-1" /> Cancel
+                              </Button>
+                            </>
+                          ) : (
                             <Button size="sm" variant="outline" onClick={() => startEditDonation(d)}>
                               <Edit3 className="h-4 w-4 mr-1" /> Edit
                             </Button>
                           )}
-                          <Button size="sm" variant={d.is_hidden ? 'outline' : 'secondary'} onClick={() => setDonationHidden(d.id, !d.is_hidden)}>
+                          <Button size="sm" variant={d.is_hidden ? 'secondary' : 'outline'} onClick={() => setDonationHidden(d.id, !d.is_hidden)}>
                             {d.is_hidden ? <Eye className="h-4 w-4 mr-1" /> : <EyeOff className="h-4 w-4 mr-1" />}
                             {d.is_hidden ? 'Unhide' : 'Hide'}
                           </Button>
@@ -566,9 +603,16 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
                           </Button>
                         </div>
                       </div>
+                      {/* Inline edit form for title/description when editing this donation. We keep it minimal. */}
+                      {editingDonationId === d.id && (
+                        <div className="mt-2 space-y-2">
+                          <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" />
+                          <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="Description" />
+                        </div>
+                      )}
                     </div>
                   ))}
-                  {/* Pagination controls */}
+                  {/* Pagination controls for donations list */}
                   <div className="flex items-center justify-between pt-2">
                     <div className="text-xs text-gray-600">
                       Page {page} of {Math.max(1, Math.ceil(totalDonationsCount / pageSize))} • Total {totalDonationsCount}
@@ -654,7 +698,7 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
           <div className="w-full max-w-3xl rounded-lg bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <h3 className="font-semibold">Donation details</h3>
-              <Button variant="ghost" size="sm" onClick={() => setDetailDonation(null)}>
+              <Button variant="ghost" size="sm" onClick={() => { setDetailDonation(null); setDetailDonor(null); }}>
                 Close
               </Button>
             </div>
@@ -666,6 +710,16 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
                 </div>
                 <div className="text-sm text-gray-600 mt-1">{detailDonation.description}</div>
                 <div className="text-xs text-gray-500 mt-1">Status: {detailDonation.status} • Updated {new Date(detailDonation.updated_at).toLocaleString()}</div>
+                <div className="text-sm text-gray-700 mt-2">
+                  <span className="text-gray-500">Donor:</span>{' '}
+                  {detailDonor?.id ? (
+                    <Link href={`/users/${detailDonor.id}`} className="underline hover:no-underline">
+                      {detailDonor.display_name}
+                    </Link>
+                  ) : (
+                    <span className="text-gray-600">{detailDonation.donor_id}</span>
+                  )}
+                </div>
               </div>
               {/* Image gallery: simple responsive grid */}
               {detailDonation.images && detailDonation.images.length > 0 && (
