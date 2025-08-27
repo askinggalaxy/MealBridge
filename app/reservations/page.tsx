@@ -114,11 +114,35 @@ export default async function ReservationsPage() {
                 </p>
               )}
               <p>
-                <strong>Donor:</strong> {donor?.display_name}
+                <strong>Donor:</strong>{' '}
+                {/* Link to donor profile when we have a valid id; fall back to plain text otherwise */}
+                {donor?.id ? (
+                  <Link
+                    href={`/users/${donor.id}`}
+                    className="text-green-700 hover:text-green-800 hover:underline"
+                    aria-label={`View donor profile of ${donor.display_name ?? 'user'}`}
+                  >
+                    {donor.display_name ?? 'View profile'}
+                  </Link>
+                ) : (
+                  donor?.display_name ?? 'Unknown donor'
+                )}
               </p>
               {recip && (
                 <p>
-                  <strong>Recipient:</strong> {recip.display_name}
+                  <strong>Recipient:</strong>{' '}
+                  {/* Link to recipient profile when we have a valid id */}
+                  {recip.id ? (
+                    <Link
+                      href={`/users/${recip.id}`}
+                      className="text-green-700 hover:text-green-800 hover:underline"
+                      aria-label={`View recipient profile of ${recip.display_name ?? 'user'}`}
+                    >
+                      {recip.display_name ?? 'View profile'}
+                    </Link>
+                  ) : (
+                    recip.display_name ?? 'Unknown recipient'
+                  )}
                 </p>
               )}
             </div>
