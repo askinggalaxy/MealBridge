@@ -221,6 +221,13 @@ export default async function PublicProfilePage({
                     </span>
                   )}
                 </div>
+                {/* Optional biography: render only when present and non-empty */}
+                {profile.bio && profile.bio.trim().length > 0 && (
+                  <p className="mt-3 text-sm text-gray-700 whitespace-pre-wrap">
+                    {/* We show the user's self-provided biography. It is optional in DB, so we guard above. */}
+                    {profile.bio}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Textarea } from '@/components/ui/textarea';
 
 // Strongly typed profile row based on generated Supabase types
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -23,6 +24,8 @@ export default function ProfileForm({ profile, email }: ProfileFormProps) {
   const [neighborhood, setNeighborhood] = useState(profile.neighborhood ?? '');
   const [phone, setPhone] = useState(profile.phone ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url ?? null);
+  // New: biography is optional in DB; we keep a local state and only send it on save
+  const [bio, setBio] = useState(profile.bio ?? '');
   const [saving, setSaving] = useState(false);
 
   const supabase = createClient();
@@ -39,6 +42,8 @@ export default function ProfileForm({ profile, email }: ProfileFormProps) {
           display_name: displayName,
           neighborhood,
           phone,
+          // Persist optional biography; if empty string, we send empty (you can also choose to send null)
+          bio: bio?.trim() ? bio : null,
           // Persist avatar_url if it changed
           avatar_url: avatarUrl ?? null,
           // updated_at is managed by DB default/trigger in schema; no need to send here
@@ -161,6 +166,19 @@ export default function ProfileForm({ profile, email }: ProfileFormProps) {
           onChange={(e) => setNeighborhood(e.target.value)}
           placeholder="e.g., Downtown, Midtown"
         />
+      </div>
+
+      {/* Optional biography (multi-line). We render a textarea to let the user add personal details. */}
+      <div>
+        <Label htmlFor="bio">Bio</Label>
+        <Textarea
+          id="bio"
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          placeholder="Tell others a bit about yourself (optional)"
+          className="min-h-[96px]"
+        />
+        <p className="text-xs text-gray-500 mt-1">This information is public on your profile page if provided.</p>
       </div>
 
       {/* Phone (optional) */}
