@@ -13,9 +13,21 @@ import { createClient } from '@/utils/supabase/client';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
+// Build password validator so that:
+// - Users can leave it blank for magic-link login (empty string allowed as input)
+// - When provided, it must be at least 6 chars
+// - Output type is `string | undefined` (no `unknown`), avoiding resolver type conflicts
+// Implementation detail: transform the raw string to `undefined` when empty, then pipe through an optional
+// string with min length to ensure correct final output typing.
+const passwordField = z
+  .string()
+  .transform((val) => (val.trim() === '' ? undefined : val))
+  .pipe(z.string().min(6, 'Password must be at least 6 characters').optional());
+
 const authSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  // Make the field optional at the object level so TS infers `password?: string | undefined`.
+  password: passwordField.optional(),
   displayName: z.string().min(2, 'Name must be at least 2 characters').optional(),
 });
 
@@ -35,8 +47,10 @@ export function AuthForm({ type }: AuthFormProps) {
     resolver: zodResolver(authSchema),
     defaultValues: {
       email: '',
-      password: '',
-      displayName: '',
+      // Do NOT set defaults for optional fields here. If we set '' for password/displayName,
+      // react-hook-form infers them as required `string`, which then conflicts with Zod's
+      // `string | undefined` outputs and breaks the resolver typing.
+      // We intentionally omit `password` and `displayName` so they remain optional.
     },
   });
 
